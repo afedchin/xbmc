@@ -1,5 +1,5 @@
 LIBNAME=ffmpeg
-BASE_URL=https://github.com/xbmc/FFmpeg/archive
-VERSION=release/3.0-xbmc
+BASE_URL=https://github.com/afedchin/FFmpeg/archive
+VERSION=kodi-mvc
 ARCHIVE=$(LIBNAME)-$(VERSION).tar.gz
 GNUTLS_VER=3.4.9
