@@ -32,6 +32,7 @@
 #include "utils/SystemInfo.h"
 #endif
 #include "Video/DVDVideoCodecFFmpeg.h"
+#include "Video/DVDVideoCodecMFX.h"
 #include "Video/DVDVideoCodecOpenMax.h"
 #if defined(HAS_IMXVPU)
 #include "Video/DVDVideoCodecIMX.h"
@@ -158,6 +159,12 @@ CDVDVideoCodec* CDVDFactoryCodec::CreateVideoCodec(CDVDStreamInfo &hint, CProces
     pCodec = OpenCodec(new CDVDVideoCodecOpenMax(processInfo), hint, options);
 #elif defined(HAS_MMAL)
     pCodec = OpenCodec(new CMMALVideo(processInfo), hint, options);
+#elif defined(TARGET_WINDOWS)
+    if (CSettings::GetInstance().GetBool("videoplayer.supportmvc") && hint.codec == AV_CODEC_ID_H264)
+    {
+      if (hint.codec_tag == MKTAG('M', 'V', 'C', '1') || hint.codec_tag == MKTAG('A', 'M', 'V', 'C'))
+        pCodec = OpenCodec(new CDVDVideoCodecMFX(processInfo), hint, options);
+    }
 #endif
     if (pCodec)
       return pCodec;

@@ -86,7 +86,7 @@
     </ClCompile>
     <Link>
       <AdditionalOptions>/IGNORE:4089 /ignore:4254 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>d3d11.lib;DInput8.lib;DSound.lib;winmm.lib;CrossGuidd.lib;Mpr.lib;Iphlpapi.lib;PowrProf.lib;setupapi.lib;dwmapi.lib;yajl.lib;dxguid.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;DInput8.lib;DSound.lib;winmm.lib;CrossGuidd.lib;Mpr.lib;Iphlpapi.lib;PowrProf.lib;setupapi.lib;dwmapi.lib;yajl.lib;dxguid.lib;libmfx.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)$(ProjectName).exe</OutputFile>
       <IgnoreSpecificDefaultLibraries>libcpmt;libc;msvcrt;libcmt;msvcrtd;msvcprtd;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
       <ModuleDefinitionFile>
@@ -160,7 +160,7 @@
     </ClCompile>
     <Link>
       <AdditionalOptions>/IGNORE:4089 /ignore:4254 %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>d3d11.lib;DInput8.lib;DSound.lib;winmm.lib;CrossGuid.lib;Mpr.lib;Iphlpapi.lib;PowrProf.lib;setupapi.lib;dwmapi.lib;yajl.lib;dxguid.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d11.lib;DInput8.lib;DSound.lib;winmm.lib;CrossGuid.lib;Mpr.lib;Iphlpapi.lib;PowrProf.lib;setupapi.lib;dwmapi.lib;yajl.lib;dxguid.lib;libmfx.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)$(ProjectName).exe</OutputFile>
       <IgnoreSpecificDefaultLibraries>libc;msvcrt;libci;msvcprt;%(IgnoreSpecificDefaultLibraries)</IgnoreSpecificDefaultLibraries>
       <DelayLoadDLLs>libxslt.dll;dnssd.dll;dwmapi.dll;ssh.dll;sqlite3.dll;avcodec-57.dll;avfilter-6.dll;avformat-57.dll;avutil-55.dll;postproc-54.dll;swresample-2.dll;swscale-4.dll;d3dcompiler_47.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
@@ -282,6 +282,7 @@
     </ClCompile>
     <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Overlay\contrib\cc_decoder708.cpp" />
     <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\DVDVideoCodec.cpp" />
+    <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\DVDVideoCodecMFX.cpp" />
     <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxBXA.cpp" />
     <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxCC.cpp" />
     <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxCDDA.cpp" />
@@ -1054,6 +1055,7 @@
     <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Audio\DVDAudioCodecPassthrough.h" />
     <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Overlay\contrib\cc_decoder.h" />
     <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Overlay\contrib\cc_decoder708.h" />
+    <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\DVDVideoCodecMFX.h" />
     <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxBXA.h" />
     <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxCC.h" />
     <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxCDDA.h" />
