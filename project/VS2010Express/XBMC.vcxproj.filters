@@ -3459,6 +3459,9 @@
     <ClCompile Include="..\..\xbmc\addons\PVRClient.cpp">
       <Filter>addons</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\DVDVideoCodecMFX.cpp">
+      <Filter>cores\VideoPlayer\DVDCodecs\Video</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\xbmc\win32\pch.h">
@@ -6716,6 +6719,9 @@
     <ClInclude Include="..\..\xbmc\ServiceManager.h" />
     <ClInclude Include="..\..\xbmc\addons\PVRClient.h">
       <Filter>addons</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\DVDVideoCodecMFX.h">
+      <Filter>cores\VideoPlayer\DVDCodecs\Video</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
