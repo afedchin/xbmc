@@ -47,12 +47,13 @@ public:
   CSurfaceContext();
   ~CSurfaceContext();
 
-  void AddSurface(ID3D11View* view);
+  void AddSurface(ID3D11View* view, ID3D11View* extended = nullptr);
   void ClearReference(ID3D11View* view);
   bool MarkRender(ID3D11View* view);
   void ClearRender(ID3D11View* view);
   bool IsValid(ID3D11View* view);
   ID3D11View* GetFree(ID3D11View* view);
+  ID3D11View* GetExtended(ID3D11View* pair);
   ID3D11View* GetAtIndex(unsigned int idx);
   void Reset();
   int Size();
@@ -62,6 +63,7 @@ public:
 protected:
   std::map<ID3D11View*, int> m_state;
   std::list<ID3D11View*> m_freeViews;
+  std::map<ID3D11View*, ID3D11View*> m_extViews;
   CCriticalSection m_section;
 };
 
@@ -71,7 +73,8 @@ class CRenderPicture
 public:
   CRenderPicture(CSurfaceContext *context);
   ~CRenderPicture();
-  ID3D11View*      view;
+  ID3D11View*      view = nullptr;
+  ID3D11View*      viewEx = nullptr;
 protected:
   CSurfaceContext *surface_context;
 };
