@@ -109,6 +109,7 @@ static std::string GetRenderFormatName(ERenderFormat format)
     case RENDER_FMT_IMXMAP:    return "IMXMAP";
     case RENDER_FMT_MMAL:      return "MMAL";
     case RENDER_FMT_AML:       return "AMLCODEC";
+    case RENDER_FMT_MSDK_MVC:  return "MSDK_MVC";
     case RENDER_FMT_NONE:      return "NONE";
   }
   return "UNKNOWN";

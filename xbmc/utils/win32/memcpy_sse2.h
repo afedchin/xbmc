@@ -224,3 +224,33 @@ inline void convert_yuv420_p01x(uint8_t *const src[], const int srcStride[], int
     }
   }
 }
+
+inline void copy_nv12(uint8_t *const src[], const int srcStride[], int height, int width, uint8_t *const dst[], const int dstStride[])
+{
+  _mm_sfence();
+  unsigned int cromaHeight = height >> 1;
+  // copy luma
+  if (srcStride[0] == dstStride[0])
+    memcpy_aligned(dst[0], src[0], srcStride[0] * height);
+  else
+  {
+    for (size_t line = 0; line < height; ++line)
+    {
+      uint8_t * s = src[0] + srcStride[0] * line;
+      uint8_t * d = dst[0] + dstStride[0] * line;
+      memcpy_aligned(d, s, srcStride[0]);
+    }
+  }
+  // copy chroma
+  if (srcStride[1] == dstStride[1])
+    memcpy_aligned(dst[1], src[1], srcStride[1] * cromaHeight);
+  else
+  {
+    for (size_t line = 0; line < cromaHeight; ++line)
+    {
+      uint8_t * s = src[1] + srcStride[1] * line;
+      uint8_t * d = dst[1] + dstStride[1] * line;
+      memcpy_aligned(d, s, srcStride[1]);
+    }
+  }
+}

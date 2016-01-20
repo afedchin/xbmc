@@ -114,7 +114,8 @@ bool CWinRenderer::HandlesRenderFormat(ERenderFormat format)
   || format == RENDER_FMT_YUV420P16
   || format == RENDER_FMT_NV12
   || format == RENDER_FMT_UYVY422
-  || format == RENDER_FMT_YUYV422)
+  || format == RENDER_FMT_YUYV422
+  || format == RENDER_FMT_MSDK_MVC)
   {
     return true;
   }
@@ -145,7 +146,7 @@ void CWinRenderer::SelectRenderMethod()
   // Set rendering to dxva before trying it, in order to open the correct processor immediately, when deinterlacing method is auto.
 
   // Force dxva renderer after dxva decoding: PS and SW renderers have performance issues after dxva decode.
-  if (g_advancedSettings.m_DXVAForceProcessorRenderer && m_format == RENDER_FMT_DXVA)
+  if ((g_advancedSettings.m_DXVAForceProcessorRenderer && m_format == RENDER_FMT_DXVA) || m_format == RENDER_FMT_MSDK_MVC)
   {
     CLog::Log(LOGNOTICE, "D3D: rendering method forced to DXVA processor");
     m_renderMethod = RENDER_DXVA;
@@ -808,6 +809,28 @@ void CWinRenderer::RenderHQ()
                        , (m_renderMethod == RENDER_DXVA && g_Windowing.UseLimitedColor()));
 }
 
+ID3D11View* CWinRenderer::SelectDXVAView(DXVA::CRenderPicture* pic)
+{
+  if (g_graphicsContext.GetStereoMode() != RENDER_STEREO_MODE_OFF
+    && g_graphicsContext.GetStereoMode() != RENDER_STEREO_MODE_MONO
+    && m_format == RENDER_FMT_MSDK_MVC
+    && pic->viewEx != nullptr)
+  {
+    int stereo_view = g_graphicsContext.GetStereoView();
+    if (CMediaSettings::GetInstance().GetCurrentVideoSettings().m_StereoInvert)
+    {
+      // flip eyes
+      if (stereo_view == RENDER_STEREO_VIEW_LEFT)  stereo_view = RENDER_STEREO_VIEW_RIGHT;
+      else if (stereo_view == RENDER_STEREO_VIEW_RIGHT) stereo_view = RENDER_STEREO_VIEW_LEFT;
+    }
+
+    return stereo_view == RENDER_STEREO_VIEW_LEFT ? pic->view : pic->viewEx;
+  }
+
+  // in any other case just return base view
+  return pic->view;
+}
+
 void CWinRenderer::RenderHW(DWORD flags)
 {
   DXVABuffer *image = reinterpret_cast<DXVABuffer*>(m_VideoBuffers[m_iYV12RenderBuffer]);
@@ -820,7 +843,7 @@ void CWinRenderer::RenderHW(DWORD flags)
 
   ID3D11View* views[8];
   memset(views, 0, 8 * sizeof(ID3D11View*));
-  views[2] = image->pic->view;
+  views[2] = SelectDXVAView(image->pic);
 
   // set future frames
   while (future < 2)
@@ -830,7 +853,7 @@ void CWinRenderer::RenderHW(DWORD flags)
     {
       if (buffers[i] && buffers[i]->pic && buffers[i]->frameIdx == image->frameIdx + (future*2 + 2))
       {
-        views[1 - future++] = buffers[i]->pic->view;
+        views[1 - future++] = SelectDXVAView(buffers[i]->pic);
         found = true;
         break;
       }
@@ -847,7 +870,7 @@ void CWinRenderer::RenderHW(DWORD flags)
     {
       if (buffers[i] && buffers[i]->pic && buffers[i]->frameIdx == image->frameIdx - (past*2 + 2))
       {
-        views[3 + past++] = buffers[i]->pic->view;
+        views[3 + past++] = SelectDXVAView(buffers[i]->pic);
         found = true;
         break;
       }
