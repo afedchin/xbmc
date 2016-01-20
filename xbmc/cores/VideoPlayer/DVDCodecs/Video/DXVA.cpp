@@ -534,11 +534,13 @@ CSurfaceContext::~CSurfaceContext()
   Reset();
 }
 
-void CSurfaceContext::AddSurface(ID3D11View* view)
+void CSurfaceContext::AddSurface(ID3D11View* view, ID3D11View* extended /*= nullptr*/)
 {
   CSingleLock lock(m_section);
   m_state[view] = 0;
   m_freeViews.push_back(view);
+  if (extended)
+    m_extViews[view] = extended;
 }
 
 void CSurfaceContext::ClearReference(ID3D11View* surf)
@@ -626,6 +628,11 @@ ID3D11View* CSurfaceContext::GetFree(ID3D11View* surf)
   return nullptr;
 }
 
+ID3D11View* CSurfaceContext::GetExtended(ID3D11View* pair)
+{
+  return m_extViews[pair];
+}
+
 ID3D11View* CSurfaceContext::GetAtIndex(unsigned int idx)
 {
   if (idx >= m_state.size())
@@ -641,6 +648,8 @@ void CSurfaceContext::Reset()
   CSingleLock lock(m_section);
   for (std::map<ID3D11View*, int>::iterator it = m_state.begin(); it != m_state.end(); ++it)
   {
+    if (!m_extViews.empty())
+      m_extViews[it->first]->Release();
     it->first->Release();
   }
   m_freeViews.clear();
