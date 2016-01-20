@@ -193,6 +193,7 @@ protected:
   void UpdatePSVideoFilter();
   bool CreateIntermediateRenderTarget(unsigned int width, unsigned int height, bool dynamic);
   bool CopyDXVA2YUVBuffer(ID3D11VideoDecoderOutputView* pView, YUVBuffer *pBuf);
+  ID3D11View* SelectDXVAView(DXVA::CRenderPicture* pic);
 
   int  m_iYV12RenderBuffer;
   int  m_NumYV12Buffers;
