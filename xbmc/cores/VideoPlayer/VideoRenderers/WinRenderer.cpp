@@ -105,6 +105,7 @@ static enum AVPixelFormat PixelFormatFromFormat(ERenderFormat format)
   if (format == RENDER_FMT_NV12)      return AV_PIX_FMT_NV12;
   if (format == RENDER_FMT_UYVY422)   return AV_PIX_FMT_UYVY422;
   if (format == RENDER_FMT_YUYV422)   return AV_PIX_FMT_YUYV422;
+  if (format == RENDER_FMT_MSDK_MVC)  return AV_PIX_FMT_NV12;
   return AV_PIX_FMT_NONE;
 }
 
@@ -700,13 +701,15 @@ void CWinRenderer::RenderSW()
 
   YUVBuffer* buf = reinterpret_cast<YUVBuffer*>(m_VideoBuffers[m_iYV12RenderBuffer]);
 
-  D3D11_MAPPED_SUBRESOURCE srclr[MAX_PLANES];
-  uint8_t*                 src[MAX_PLANES];
-  int                      srcStride[MAX_PLANES];
+  D3D11_MAPPED_SUBRESOURCE srclr[MAX_PLANES] = { 0 };
+  uint8_t*                 src[MAX_PLANES] = { 0 };
+  int                      srcStride[MAX_PLANES] = { 0 };
+  bool isExtended = UseExtendedMVCView();
 
   for (unsigned int idx = 0; idx < buf->GetActivePlanes(); idx++)
   {
-    if(!(buf->planes[idx].texture.LockRect(0, &srclr[idx], D3D11_MAP_READ)))
+    CD3DTexture *texture = isExtended ? &buf->stereo[idx].texture : &buf->planes[idx].texture;
+    if(!(texture->LockRect(0, &srclr[idx], D3D11_MAP_READ)))
       CLog::Log(LOGERROR, __FUNCTION__" - failed to lock yuv textures into memory");
     else
     {
@@ -719,15 +722,17 @@ void CWinRenderer::RenderSW()
   if (!m_IntermediateTarget.LockRect(0, &destlr, D3D11_MAP_WRITE_DISCARD))
     CLog::Log(LOGERROR, __FUNCTION__" - failed to lock swtarget texture into memory");
 
-  uint8_t *dst[] = { (uint8_t*)destlr.pData, 0, 0, 0 };
-  int dstStride[] = { destlr.RowPitch, 0, 0, 0 };
+  uint8_t *dst[] = { (uint8_t*)destlr.pData, 0, 0 };
+  int dstStride[] = { destlr.RowPitch, 0, 0 };
 
   sws_scale(m_sw_scale_ctx, src, srcStride, 0, m_sourceHeight, dst, dstStride);
 
   for (unsigned int idx = 0; idx < buf->GetActivePlanes(); idx++)
-    if(!(buf->planes[idx].texture.UnlockRect(0)))
+  {
+    CD3DTexture *texture = isExtended ? &buf->stereo[idx].texture : &buf->planes[idx].texture;
+    if (!(texture->UnlockRect(0)))
       CLog::Log(LOGERROR, __FUNCTION__" - failed to unlock yuv textures");
-
+  }
   if (!m_IntermediateTarget.UnlockRect(0))
     CLog::Log(LOGERROR, __FUNCTION__" - failed to unlock swtarget texture");
 
@@ -797,27 +802,12 @@ void CWinRenderer::RenderPS()
     destPoints[3] = { destRect.x1, destRect.y2 };
   }
 
-  bool isExtended = false;
-  if (g_graphicsContext.GetStereoMode() != RENDER_STEREO_MODE_OFF
-    && g_graphicsContext.GetStereoMode() != RENDER_STEREO_MODE_MONO
-    && m_format == RENDER_FMT_MSDK_MVC)
-  {
-    int stereo_view = g_graphicsContext.GetStereoView();
-    if (CMediaSettings::GetInstance().GetCurrentVideoSettings().m_StereoInvert)
-    {
-      // flip eyes
-      if (stereo_view == RENDER_STEREO_VIEW_LEFT)  stereo_view = RENDER_STEREO_VIEW_RIGHT;
-      else if (stereo_view == RENDER_STEREO_VIEW_RIGHT) stereo_view = RENDER_STEREO_VIEW_LEFT;
-    }
-    isExtended = stereo_view == RENDER_STEREO_VIEW_RIGHT;
-  }
-
   // render video frame
   m_colorShader->Render(m_sourceRect, destPoints,
                         CMediaSettings::GetInstance().GetCurrentVideoSettings().m_Contrast,
                         CMediaSettings::GetInstance().GetCurrentVideoSettings().m_Brightness,
                         m_iFlags, reinterpret_cast<YUVBuffer*>(m_VideoBuffers[m_iYV12RenderBuffer]),
-                        isExtended);
+                        UseExtendedMVCView());
   // Restore our view port.
   g_Windowing.RestoreViewPort();
   // Restore the render target and depth view.
@@ -838,24 +828,7 @@ void CWinRenderer::RenderHQ()
 
 ID3D11View* CWinRenderer::SelectDXVAView(DXVA::CRenderPicture* pic)
 {
-  if (g_graphicsContext.GetStereoMode() != RENDER_STEREO_MODE_OFF
-    && g_graphicsContext.GetStereoMode() != RENDER_STEREO_MODE_MONO
-    && m_format == RENDER_FMT_MSDK_MVC
-    && pic->viewEx != nullptr)
-  {
-    int stereo_view = g_graphicsContext.GetStereoView();
-    if (CMediaSettings::GetInstance().GetCurrentVideoSettings().m_StereoInvert)
-    {
-      // flip eyes
-      if (stereo_view == RENDER_STEREO_VIEW_LEFT)  stereo_view = RENDER_STEREO_VIEW_RIGHT;
-      else if (stereo_view == RENDER_STEREO_VIEW_RIGHT) stereo_view = RENDER_STEREO_VIEW_LEFT;
-    }
-
-    return stereo_view == RENDER_STEREO_VIEW_LEFT ? pic->view : pic->viewEx;
-  }
-
-  // in any other case just return base view
-  return pic->view;
+  return UseExtendedMVCView() && pic->viewEx ? pic->viewEx : pic->view;
 }
 
 void CWinRenderer::RenderHW(DWORD flags)
@@ -1188,6 +1161,25 @@ bool CWinRenderer::NeedBufferForRef(int idx)
   return false;
 }
 
+bool CWinRenderer::UseExtendedMVCView()
+{
+  bool isExtended = false;
+  if (g_graphicsContext.GetStereoMode() != RENDER_STEREO_MODE_OFF
+    && g_graphicsContext.GetStereoMode() != RENDER_STEREO_MODE_MONO
+    && m_format == RENDER_FMT_MSDK_MVC)
+  {
+    int stereo_view = g_graphicsContext.GetStereoView();
+    if (CMediaSettings::GetInstance().GetCurrentVideoSettings().m_StereoInvert)
+    {
+      // flip eyes
+      if (stereo_view == RENDER_STEREO_VIEW_LEFT)  stereo_view = RENDER_STEREO_VIEW_RIGHT;
+      else if (stereo_view == RENDER_STEREO_VIEW_RIGHT) stereo_view = RENDER_STEREO_VIEW_LEFT;
+    }
+    isExtended = (stereo_view == RENDER_STEREO_VIEW_RIGHT);
+  }
+  return isExtended;
+}
+
 //============================================
 
 YUVBuffer::~YUVBuffer()
@@ -1288,7 +1280,7 @@ void YUVBuffer::Release()
         stereo[i].texture.UnlockRect(0);
 
       stereo[i].texture.Release();
-      memset(&planes[i].rect, 0, sizeof(stereo[i].rect));
+      memset(&stereo[i].rect, 0, sizeof(stereo[i].rect));
     }
   }
 }
@@ -1326,21 +1318,19 @@ void YUVBuffer::StartDecode()
 
   for(unsigned i = 0; i < m_activeplanes; i++)
   {
-    if(planes[i].texture.Get()
-    && planes[i].texture.LockRect(0, &planes[i].rect, m_mapType) == false)
+    if(planes[i].texture.LockRect(0, &planes[i].rect, m_mapType) == false)
     {
       memset(&planes[i].rect, 0, sizeof(planes[i].rect));
       CLog::Log(LOGERROR, __FUNCTION__" - failed to lock texture %d into memory", i);
       m_locked = false;
     }
-
-    if(m_format == RENDER_FMT_MSDK_MVC
-      && stereo[i].texture.Get()
-      && stereo[i].texture.LockRect(0, &stereo[i].rect, m_mapType) == false)
+    if (m_format == RENDER_FMT_MSDK_MVC)
     {
-      memset(&stereo[i].rect, 0, sizeof(stereo[i].rect));
-      CLog::Log(LOGERROR, __FUNCTION__" - failed to lock texture %d into memory", i);
-      m_locked = false;
+      if (stereo[i].texture.LockRect(0, &stereo[i].rect, m_mapType) == false)
+      {
+        memset(&stereo[i].rect, 0, sizeof(stereo[i].rect));
+        CLog::Log(LOGERROR, __FUNCTION__" - failed to lock texture %d into memory", i);
+      }
     }
   }
 }
