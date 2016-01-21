@@ -268,6 +268,7 @@ bool CYUV2RGBShader::Create(unsigned int sourceWidth, unsigned int sourceHeight,
     texWidth = sourceWidth;
     break;
   case RENDER_FMT_NV12:
+  case RENDER_FMT_MSDK_MVC:
     defines["XBMC_NV12"] = "";
     texWidth = sourceWidth;
     // FL 9.x doesn't support DXGI_FORMAT_R8G8_UNORM, so we have to use SNORM and correct values in shader
@@ -318,11 +319,12 @@ void CYUV2RGBShader::Render(CRect sourceRect, CPoint dest[],
                             float contrast,
                             float brightness,
                             unsigned int flags,
-                            YUVBuffer* YUVbuf)
+                            YUVBuffer* YUVbuf,
+                            bool extendedView)
 {
   PrepareParameters(sourceRect, dest,
                     contrast, brightness, flags);
-  SetShaderParameters(YUVbuf);
+  SetShaderParameters(YUVbuf, extendedView);
   Execute(nullptr, 4);
 }
 
@@ -388,10 +390,10 @@ void CYUV2RGBShader::PrepareParameters(CRect sourceRect,
                          m_format);
 }
 
-void CYUV2RGBShader::SetShaderParameters(YUVBuffer* YUVbuf)
+void CYUV2RGBShader::SetShaderParameters(YUVBuffer* YUVbuf, bool extendedView)
 {
   m_effect.SetTechnique("YUV2RGB_T");
-  SVideoPlane *planes = YUVbuf->planes;
+  SVideoPlane *planes = extendedView ? YUVbuf->stereo : YUVbuf->planes;
   ID3D11ShaderResourceView* ppSRView[3] =
   {
     planes[0].texture.GetShaderResource(),
