@@ -3468,6 +3468,9 @@
     <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxStreamSSIF.cpp">
       <Filter>cores\VideoPlayer\DVDDemuxers</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxMVC.cpp">
+      <Filter>cores\VideoPlayer\DVDDemuxers</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\xbmc\win32\pch.h">
@@ -6736,6 +6739,9 @@
       <Filter>cores\VideoPlayer\DVDCodecs\Video</Filter>
     </ClInclude>
     <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxStreamSSIF.h">
+      <Filter>cores\VideoPlayer\DVDDemuxers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxMVC.h">
       <Filter>cores\VideoPlayer\DVDDemuxers</Filter>
     </ClInclude>
   </ItemGroup>
