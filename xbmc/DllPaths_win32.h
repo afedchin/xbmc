@@ -36,7 +36,7 @@
 #define DLL_PATH_LIBRTMP       "special://xbmcbin/system/players/dvdplayer/librtmp.dll"
 
 /* libbluray */
-#define DLL_PATH_LIBBLURAY     "special://xbmcbin/system/players/dvdplayer/libbluray.dll"
+#define DLL_PATH_LIBBLURAY     "special://xbmcbin/system/players/VideoPlayer/libbluray.dll"
 
 #endif
 
