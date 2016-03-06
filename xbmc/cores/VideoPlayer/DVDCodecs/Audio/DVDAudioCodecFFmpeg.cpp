@@ -119,7 +119,7 @@ bool CDVDAudioCodecFFmpeg::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options
   m_bOpenedCodec = true;
   m_iSampleFormat = AV_SAMPLE_FMT_NONE;
   m_matrixEncoding = AV_MATRIX_ENCODING_NONE;
-
+  m_codecname = m_pCodecContext->codec->name;
   return true;
 }
 

@@ -95,6 +95,8 @@ CVideoPlayerVideo::CVideoPlayerVideo(CDVDClock* pClock
   m_iFrameRateLength = 0;
   m_bFpsInvalid = false;
   m_bAllowFullscreen = false;
+  m_width = 0;
+  m_height = 0;
 }
 
 CVideoPlayerVideo::~CVideoPlayerVideo()
@@ -184,6 +186,7 @@ void CVideoPlayerVideo::OpenStream(CDVDStreamInfo &hint, CDVDVideoCodec* codec)
   m_pVideoCodec = codec;
   m_hints   = hint;
   m_stalled = m_messageQueue.GetPacketCount(CDVDMsg::DEMUXER_PACKET) == 0;
+  m_codecname = m_pVideoCodec->GetName();
   m_packets.clear();
   m_syncState = IDVDStreamPlayer::SYNC_STARTING;
 }
@@ -599,6 +602,7 @@ bool CVideoPlayerVideo::ProcessDecoderOutput(int &decoderState, double &frametim
 
       if (m_syncState == IDVDStreamPlayer::SYNC_STARTING && !(m_picture.iFlags & DVP_FLAG_DROPPED))
       {
+        m_codecname = m_pVideoCodec->GetName();
         m_syncState = IDVDStreamPlayer::SYNC_WAITSYNC;
         SStartMsg msg;
         msg.player = VideoPlayer_VIDEO;
@@ -881,6 +885,8 @@ int CVideoPlayerVideo::OutputPicture(const DVDVideoPicture* src, double pts)
     m_droppingStats.AddOutputDropGain(pts, 1);
     return EOS_DROPPED;
   }
+  m_width = pPicture->iDisplayWidth;
+  m_height = pPicture->iDisplayHeight;
 
   m_renderManager.FlipPage(m_bAbortOutput, pts, -1, mDisplayField);
 
@@ -891,7 +897,9 @@ std::string CVideoPlayerVideo::GetPlayerInfo()
 {
   std::ostringstream s;
   s << "vq:"   << std::setw(2) << std::min(99,GetLevel()) << "%";
+  s << ", dc:"   << m_codecname;
   s << ", Mb/s:" << std::fixed << std::setprecision(2) << (double)GetVideoBitrate() / (1024.0*1024.0);
+  s << ", " << m_width << "x" << m_height;
   s << ", fr:"     << std::fixed << std::setprecision(3) << m_fFrameRate;
   s << ", drop:" << m_iDroppedFrames;
   s << ", skip:" << m_renderManager.GetSkippedFrames();

@@ -134,6 +134,8 @@ void CVideoPlayerAudio::OpenStream(CDVDStreamInfo &hints, CDVDAudioCodec* codec)
   if (hints.samplerate != m_streaminfo.samplerate)
     SwitchCodecIfNeeded();
 
+  m_codecname = m_pAudioCodec->GetName();
+
   m_audioClock = 0;
   m_stalled = m_messageQueue.GetPacketCount(CDVDMsg::DEMUXER_PACKET) == 0;
 
@@ -206,8 +208,9 @@ void CVideoPlayerAudio::UpdatePlayerInfo()
 {
   std::ostringstream s;
   s << "aq:"     << std::setw(2) << std::min(99,m_messageQueue.GetLevel()) << "%";
+  s << ", ac:"   << m_codecname;
   s << ", Kb/s:" << std::fixed << std::setprecision(2) << (double)GetAudioBitrate() / 1024.0;
-
+  s << ", " << m_streaminfo.channels << " channel, " << m_streaminfo.samplerate/1000 << " kHz";
   //print the inverse of the resample ratio, since that makes more sense
   //if the resample ratio is 0.5, then we're playing twice as fast
   if (m_synctype == SYNC_RESAMPLE)
@@ -589,6 +592,7 @@ bool CVideoPlayerAudio::SwitchCodecIfNeeded()
 
   delete m_pAudioCodec;
   m_pAudioCodec = codec;
+  m_codecname = m_pAudioCodec->GetName();
 
   return true;
 }
