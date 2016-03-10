@@ -93,6 +93,8 @@ CRenderSystemDX::CRenderSystemDX() : CRenderSystemBase()
   ZeroMemory(&m_viewPort, sizeof(m_viewPort));
   ZeroMemory(&m_scissor, sizeof(CRect));
   ZeroMemory(&m_adapterDesc, sizeof(DXGI_ADAPTER_DESC));
+  m_bDefaultStereoEnabled = false;
+  m_bStereoEnabled = false;
 }
 
 CRenderSystemDX::~CRenderSystemDX()
@@ -234,6 +236,32 @@ void CRenderSystemDX::OnResize(unsigned int width, unsigned int height)
   CreateWindowSizeDependentResources();
 }
 
+bool CRenderSystemDX::GetStereoModeDesc(DXGI_MODE_DESC1 *pModeDesc)
+{
+  bool result = false;
+  IDXGIOutput1* pOutput = nullptr;
+
+  if (FAILED(m_pOutput->QueryInterface(__uuidof(IDXGIOutput1), reinterpret_cast<void**>(&pOutput))))
+    return result;
+
+  RESOLUTION_INFO res = g_graphicsContext.GetResInfo();
+  DXGI_MODE_DESC1 toFindMode;
+  toFindMode.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+  toFindMode.Width = res.iScreenWidth;
+  toFindMode.Height = res.iScreenHeight;
+  // use 23.976 always
+  toFindMode.RefreshRate.Numerator = 24000;
+  toFindMode.RefreshRate.Denominator = 1001;
+  toFindMode.Stereo = 1;
+  toFindMode.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+  toFindMode.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_PROGRESSIVE;
+
+  result = SUCCEEDED(pOutput->FindClosestMatchingMode1(&toFindMode, pModeDesc, nullptr));
+  SAFE_RELEASE(pOutput);
+
+  return result;
+}
+
 void CRenderSystemDX::GetClosestDisplayModeToCurrent(IDXGIOutput* output, DXGI_MODE_DESC* outCurrentDisplayMode, bool useCached /*= false*/)
 {
   DXGI_OUTPUT_DESC outputDesc;
@@ -367,14 +395,6 @@ void CRenderSystemDX::SetFullScreenInternal()
     toMatchMode.Format = scDesc.BufferDesc.Format;
     toMatchMode.Scaling = scDesc.BufferDesc.Scaling;
     toMatchMode.ScanlineOrdering = scDesc.BufferDesc.ScanlineOrdering;
-    // force switch to 1080p23 before hardware stereo
-    if (RENDER_STEREO_MODE_HARDWAREBASED == g_graphicsContext.GetStereoMode())
-    {
-      toMatchMode.RefreshRate.Numerator = 24000;
-      toMatchMode.RefreshRate.Denominator = 1001;
-      toMatchMode.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_PROGRESSIVE;
-      m_refreshRate = RATIONAL_TO_FLOAT(toMatchMode.RefreshRate);
-    }
 
     // find closest mode
     m_pOutput->FindClosestMatchingMode(&toMatchMode, &matchedMode, m_pD3DDev);
@@ -402,7 +422,7 @@ void CRenderSystemDX::SetFullScreenInternal()
   }
 end:
   // in windowed mode DWM uses triple buffering in any case. 
-  // for FSEM we use double buffering
+  // for FSEM we use double buffering to avoid possible shuttering
   SetMaximumFrameLatency(2 - m_useWindowedDX);
 }
 
@@ -416,6 +436,10 @@ bool CRenderSystemDX::IsFormatSupport(DXGI_FORMAT format, unsigned int usage)
 bool CRenderSystemDX::DestroyRenderSystem()
 {
   DeleteDevice();
+
+  // restore stereo setting on exit
+  if (g_advancedSettings.m_useDisplayControlHWStereo)
+    SetDisplayStereoEnabled(m_bDefaultStereoEnabled);
 
   SAFE_RELEASE(m_pOutput);
   SAFE_RELEASE(m_adapter);
@@ -473,6 +497,7 @@ void CRenderSystemDX::DeleteDevice()
   m_bResizeRequred = false;
   m_bHWStereoEnabled = false;
   m_bRenderCreated = false;
+  m_bStereoEnabled = false;
 }
 
 void CRenderSystemDX::OnDeviceLost()
@@ -596,6 +621,9 @@ bool CRenderSystemDX::CreateDevice()
 
   SAFE_RELEASE(m_dxgiFactory);
   m_adapter->GetParent(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&m_dxgiFactory));
+
+  if (g_advancedSettings.m_useDisplayControlHWStereo)
+    UpdateDisplayStereoStatus(true);
 
   if (!m_pOutput)
   {
@@ -756,7 +784,9 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
   if (m_pSwapChain)
   {
     m_pSwapChain->GetDesc(&scDesc);
-    bNeedResize = m_bResizeRequred || m_nBackBufferWidth != scDesc.BufferDesc.Width || m_nBackBufferHeight != scDesc.BufferDesc.Height;
+    bNeedResize = m_bResizeRequred ||
+                  m_nBackBufferWidth != scDesc.BufferDesc.Width ||
+                  m_nBackBufferHeight != scDesc.BufferDesc.Height;
   }
   else
     bNeedResize = true;
@@ -765,7 +795,7 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
   {
     DXGI_SWAP_CHAIN_DESC1 scDesc;
     m_pSwapChain1->GetDesc1(&scDesc);
-    bNeedRecreate = (scDesc.Stereo && !bHWStereoEnabled) || (!scDesc.Stereo && bHWStereoEnabled);
+    bNeedRecreate = (scDesc.Stereo != bHWStereoEnabled);
   }
 
   if (!bNeedRecreate && !bNeedResize)
@@ -775,7 +805,6 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
   }
 
   m_resizeInProgress = true;
-
   CLog::Log(LOGDEBUG, "%s - (Re)Create window size (%dx%d) dependent resources.", __FUNCTION__, m_nBackBufferWidth, m_nBackBufferHeight);
 
   bool bRestoreRTView = false;
@@ -800,15 +829,24 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
 
   if (bNeedRecreate)
   {
+    // notify player about display lost if it's not notified previously
+    if (!m_bResizeRequred)
+      OnDisplayLost();
+
     BOOL fullScreen;
     m_pSwapChain1->GetFullscreenState(&fullScreen, NULL);
     if (fullScreen)
       m_pSwapChain1->SetFullscreenState(false, NULL);
 
+    // disable/enable stereo 3D on system level
+    if (g_advancedSettings.m_useDisplayControlHWStereo)
+      SetDisplayStereoEnabled(bHWStereoEnabled);
+
     CLog::Log(LOGDEBUG, "%s - Destroying swapchain in order to switch %s stereoscopic 3D.", __FUNCTION__, bHWStereoEnabled ? "to" : "from");
 
     SAFE_RELEASE(m_pSwapChain);
     SAFE_RELEASE(m_pSwapChain1);
+    m_pImdContext->ClearState();
     m_pImdContext->Flush();
 
     // flush command is asynchronous, so wait until destruction is completed
@@ -847,6 +885,19 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
 
       hr = dxgiFactory2->CreateSwapChainForHwnd(m_pD3DDev, m_hFocusWnd, &scDesc1, &scFSDesc, NULL, &m_pSwapChain1);
 
+      if (FAILED(hr) && bHWStereoEnabled)
+      {
+        // switch to stereo mode failed, create mono swapchain
+        CLog::Log(LOGERROR, "%s - Creating stereo swap chain failed with error: %s.", __FUNCTION__, GetErrorDescription(hr).c_str());
+        CLog::Log(LOGWARNING, "%s - Fallback to Mone mode.", __FUNCTION__);
+
+        scDesc1.Stereo = false;
+        hr = dxgiFactory2->CreateSwapChainForHwnd(m_pD3DDev, m_hFocusWnd, &scDesc1, &scFSDesc, NULL, &m_pSwapChain1);
+
+        // fallback to split_horisontal mode.
+        g_graphicsContext.SetStereoMode(RENDER_STEREO_MODE_SPLIT_HORIZONTAL);
+      }
+
       if (SUCCEEDED(hr))
       {
         m_pSwapChain1->QueryInterface(__uuidof(IDXGISwapChain), reinterpret_cast<void**>(&m_pSwapChain));
@@ -854,7 +905,7 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
         // - restart presenting, 0 in sync interval discards current frame also
         // - wait until new frame will be drawn
         // sleep value possible depends on hardware m.b. need a setting in as.xml
-        if (m_useWindowedDX && !bHWStereoEnabled && m_bHWStereoEnabled)
+        if (!g_advancedSettings.m_useDisplayControlHWStereo && m_useWindowedDX && !bHWStereoEnabled && m_bHWStereoEnabled)
         {
           DXGI_PRESENT_PARAMETERS presentParams = {};
           presentParams.DirtyRectsCount = 0;
@@ -865,17 +916,6 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
           Sleep(100);
         }
         m_bHWStereoEnabled = bHWStereoEnabled;
-      }
-      else if (bHWStereoEnabled)
-      {
-        // switch to stereo mode failed, create mono swapchain
-        CLog::Log(LOGERROR, "%s - Creating swap chain failed with error: %s.", __FUNCTION__, GetErrorDescription(hr).c_str());
-
-        scDesc1.Stereo = false;
-        hr = dxgiFactory2->CreateSwapChainForHwnd(m_pD3DDev, m_hFocusWnd, &scDesc1, &scFSDesc, NULL, &m_pSwapChain1);
-
-        // fallback to split_horisontal mode.
-        g_graphicsContext.SetStereoMode(RENDER_STEREO_MODE_SPLIT_HORIZONTAL);
       }
       dxgiFactory2->Release();
     }
@@ -918,9 +958,13 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
     {
       CLog::Log(LOGERROR, "%s - Failed to resize buffers (%s).", __FUNCTION__, GetErrorDescription(hr).c_str());
       if (DXGI_ERROR_DEVICE_REMOVED == hr)
+      {
         OnDeviceLost();
-
-      return false;
+        return false;
+      }
+      // wait a bit and try again
+      Sleep(50);
+      hr = m_pSwapChain->ResizeBuffers(scDesc.BufferCount, m_nBackBufferWidth, m_nBackBufferHeight, scDesc.BufferDesc.Format, scFlags);
     }
   }
 
@@ -951,7 +995,6 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
     if (FAILED(hr))
     {
       CLog::Log(LOGERROR, "%s - Failed to create right eye buffer (%s).", __FUNCTION__, GetErrorDescription(hr).c_str());
-      pBackBuffer->Release();
       g_graphicsContext.SetStereoMode(RENDER_STEREO_MODE_OFF); // try fallback to mono
     }
   }
@@ -999,6 +1042,7 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
   if (bRestoreRTView)
     m_pContext->OMSetRenderTargets(1, &m_pRenderTargetView, m_depthStencilView);
 
+  // notify about resurection of display
   if (m_bResizeRequred)
     OnDisplayBack();
 
@@ -1249,6 +1293,8 @@ bool CRenderSystemDX::BeginRender()
     break;
   case DXGI_ERROR_INVALID_CALL: // application provided invalid parameter data. Try to return after resize buffers
     CLog::Log(LOGERROR, "DXGI_ERROR_INVALID_CALL");
+    // in most cases when DXGI_ERROR_INVALID_CALL occurs it means what DXGI silently leaves from FSE mode.
+    // if so, we should return for FSE mode and resize buffers
     SetFullScreenInternal();
     CreateWindowSizeDependentResources();
     m_nDeviceStatus = S_OK;
@@ -1661,16 +1707,52 @@ void CRenderSystemDX::SetStereoMode(RENDER_STEREO_MODE mode, RENDER_STEREO_VIEW 
   }
 }
 
-bool CRenderSystemDX::SupportsStereo(RENDER_STEREO_MODE mode) const
+bool CRenderSystemDX::GetStereoEnabled() const
 {
-  bool isHWStereoSupport = false;
-  IDXGIFactory2* dxgiFactory2 = NULL;
+  bool result = false;
+
+  IDXGIFactory2* dxgiFactory2 = nullptr;
   if (SUCCEEDED(m_dxgiFactory->QueryInterface(__uuidof(IDXGIFactory2), reinterpret_cast<void**>(&dxgiFactory2))))
-  {
-    isHWStereoSupport = dxgiFactory2 && dxgiFactory2->IsWindowedStereoEnabled();
-  }
+    result = dxgiFactory2->IsWindowedStereoEnabled();
   SAFE_RELEASE(dxgiFactory2);
 
+  return result;
+}
+
+bool CRenderSystemDX::GetDisplayStereoEnabled() const
+{
+  bool result = false;
+
+  IDXGIDisplayControl * pDXGIDisplayControl = nullptr;
+  if (SUCCEEDED(m_dxgiFactory->QueryInterface(__uuidof(IDXGIDisplayControl), (void **)&pDXGIDisplayControl)))
+    result = pDXGIDisplayControl->IsStereoEnabled();
+  SAFE_RELEASE(pDXGIDisplayControl);
+
+  return result;
+}
+
+void CRenderSystemDX::SetDisplayStereoEnabled(bool enable)
+{
+  IDXGIDisplayControl * pDXGIDisplayControl = nullptr;
+  if (SUCCEEDED(m_dxgiFactory->QueryInterface(__uuidof(IDXGIDisplayControl), (void **)&pDXGIDisplayControl)))
+    pDXGIDisplayControl->SetStereoEnabled(enable);
+  SAFE_RELEASE(pDXGIDisplayControl);
+}
+
+void CRenderSystemDX::UpdateDisplayStereoStatus(bool first)
+{
+  if (first)
+    m_bDefaultStereoEnabled = GetDisplayStereoEnabled();
+
+  if (!first || !m_bDefaultStereoEnabled)
+    SetDisplayStereoEnabled(true);
+
+  m_bStereoEnabled = GetStereoEnabled();
+  SetDisplayStereoEnabled(false);
+}
+
+bool CRenderSystemDX::SupportsStereo(RENDER_STEREO_MODE mode) const
+{
   switch (mode)
   {
     case RENDER_STEREO_MODE_ANAGLYPH_RED_CYAN:
@@ -1680,7 +1762,7 @@ bool CRenderSystemDX::SupportsStereo(RENDER_STEREO_MODE mode) const
     case RENDER_STEREO_MODE_CHECKERBOARD:
       return true;
     case RENDER_STEREO_MODE_HARDWAREBASED:
-      return isHWStereoSupport;
+      return m_bStereoEnabled || GetStereoEnabled();
     default:
       return CRenderSystemBase::SupportsStereo(mode);
   }
