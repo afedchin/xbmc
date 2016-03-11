@@ -194,6 +194,15 @@ std::string CStereoscopicsManager::DetectStereoModeByString(const std::string &n
   if (re.RegFind(searchString) > -1)
     stereoMode = "top_bottom";
 
+  if (!re.RegComp(CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_stereoscopicregex_mvc.c_str()))
+  {
+    CLog::Log(LOGERROR, "%s: Invalid RegExp for matching 3d MVC content:'%s'", __FUNCTION__, CServiceBroker::GetSettingsComponent()->GetAdvancedSettings()->m_stereoscopicregex_mvc.c_str());
+    return stereoMode;
+  }
+
+  if (re.RegFind(searchString) > -1)
+    stereoMode = "block_lr";
+
   return stereoMode;
 }
 
