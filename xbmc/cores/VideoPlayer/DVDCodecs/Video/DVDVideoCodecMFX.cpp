@@ -1,32 +1,47 @@
 /*
-*      Copyright (C) 2010-2016 Hendrik Leppkes
-*      http://www.1f0.de
-*
-*  This program is free software; you can redistribute it and/or modify
-*  it under the terms of the GNU General Public License as published by
-*  the Free Software Foundation; either version 2 of the License, or
-*  (at your option) any later version.
-*
-*  This program is distributed in the hope that it will be useful,
-*  but WITHOUT ANY WARRANTY; without even the implied warranty of
-*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*  GNU General Public License for more details.
-*
-*  You should have received a copy of the GNU General Public License along
-*  with this program; if not, write to the Free Software Foundation, Inc.,
-*  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/
+ *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      http://www.1f0.de
+ *      Copyright (C) 2005-2016 Team Kodi
+ *      http://kodi.tv
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
 
 #include "DVDVideoCodecMFX.h"
-#include "../DVDCodecUtils.h"
+#include "DVDCodecs/DVDCodecUtils.h"
+#include "DVDCodecs/DVDCodecs.h"
 #include "DVDClock.h"
 #include "DVDStreamInfo.h"
 #include "utils/Log.h"
+#include "windowing/WindowingFactory.h"
+#include <iterator>
+
+#include "mfx/BaseFrameAllocator.h"
+#include "mfx/GeneralAllocator.h"
+#include "mfx/D3D11FrameAllocator.h"
 
 extern "C" {
 #include "libavutil/intreadwrite.h"
 }
 
+#define MSDK_IGNORE_RESULT(p, x) {if ((x) == (p)) {p = MFX_ERR_NONE;}}
+#define MSDK_CHECK_RESULT(p, x)   {if ((x) > (p)) { CLog::Log(LOGERROR, "%s: error code %d (%d)", __FUNCTION__, p, __LINE__); return false;}}
+
+//-----------------------------------------------------------------------------
+// static methods
+//-----------------------------------------------------------------------------
 static bool alloc_and_copy(uint8_t **poutbuf, int *poutbuf_size, const uint8_t *in, uint32_t in_size)
 {
   uint32_t offset = *poutbuf_size;
@@ -78,6 +93,9 @@ static uint32_t avc_quant(uint8_t *src, uint8_t *dst, int extralen)
   return cb;
 }
 
+//-----------------------------------------------------------------------------
+// AnnexB Converter
+//-----------------------------------------------------------------------------
 bool CAnnexBConverter::Convert(uint8_t **poutbuf, int *poutbuf_size, const uint8_t *buf, int buf_size)
 {
   int32_t nal_size;
@@ -120,10 +138,138 @@ fail:
   return false;
 }
 
+//-----------------------------------------------------------------------------
+// MVC Context
+//-----------------------------------------------------------------------------
+CMVCContext::CMVCContext()
+{
+  m_BufferQueue.clear();
+}
+
+CMVCContext::~CMVCContext()
+{
+  for (auto it = m_BufferQueue.begin(); it != m_BufferQueue.end(); ++it)
+    delete (*it);
+}
+
+void CMVCContext::AllocateBuffers(mfxFrameInfo &frameInfo, uint8_t numBuffers, mfxMemId* mids)
+{
+  for (size_t i = 0; i < numBuffers; ++i)
+  {
+    MVCBuffer *pBuffer = new MVCBuffer;
+    pBuffer->surface.Info = frameInfo;
+    pBuffer->surface.Data.MemId = mids[i];
+    m_BufferQueue.push_back(pBuffer);
+  }
+}
+
+MVCBuffer* CMVCContext::GetFree()
+{
+  CSingleLock lock(m_BufferCritSec);
+  MVCBuffer *pBuffer = nullptr;
+
+  auto it = std::find_if(m_BufferQueue.begin(), m_BufferQueue.end(),
+                         [](MVCBuffer *item){
+                           return !item->surface.Data.Locked && !item->queued && !item->render;
+                         });
+  if (it != m_BufferQueue.end())
+    pBuffer = *it;
+
+  if (!pBuffer)
+    CLog::Log(LOGERROR, "No free buffers (%d total)", m_BufferQueue.size());
+
+  return pBuffer;
+}
+
+MVCBuffer* CMVCContext::FindBuffer(mfxFrameSurface1* pSurface)
+{
+  CSingleLock lock(m_BufferCritSec);
+  bool bFound = false;
+  auto it = std::find_if(m_BufferQueue.begin(), m_BufferQueue.end(),
+                        [pSurface](MVCBuffer *item){
+                          return &item->surface == pSurface;
+                        });
+  if (it != m_BufferQueue.end())
+    return *it;
+
+  return nullptr;
+}
+
+void CMVCContext::ReleaseBuffer(MVCBuffer * pBuffer)
+{
+  if (!pBuffer)
+    return;
+
+  CSingleLock lock(m_BufferCritSec);
+  if (pBuffer)
+  {
+    pBuffer->render = false;
+    pBuffer->queued = false;
+    pBuffer->sync = nullptr;
+  }
+}
+
+MVCBuffer* CMVCContext::MarkQueued(mfxFrameSurface1 *pSurface, mfxSyncPoint sync)
+{
+  CSingleLock lock(m_BufferCritSec);
+
+  MVCBuffer * pOutputBuffer = FindBuffer(pSurface);
+  pOutputBuffer->render = false;
+  pOutputBuffer->queued = true;
+  pOutputBuffer->sync = sync;
+
+  return pOutputBuffer;
+}
+
+MVCBuffer* CMVCContext::MarkRender(MVCBuffer* pBuffer)
+{
+  CSingleLock lock(m_BufferCritSec);
+
+  pBuffer->queued = false;
+  pBuffer->render = true;
+
+  return pBuffer;
+}
+
+void CMVCContext::ClearRender(CMVCPicture *picture)
+{
+  CSingleLock lock(m_BufferCritSec);
+
+  ReleaseBuffer(picture->baseView);
+  ReleaseBuffer(picture->extraView);
+  picture->baseView->render = false;
+  picture->extraView->render = false;
+}
+
+CMVCPicture * CMVCContext::GetPicture(MVCBuffer *base, MVCBuffer *extended)
+{
+  CMVCPicture *pRenderPicture = new CMVCPicture(base, extended);
+  pRenderPicture->context = this->Acquire();
+
+  return pRenderPicture;
+}
+
+//-----------------------------------------------------------------------------
+// MVC Picture
+//-----------------------------------------------------------------------------
+CMVCPicture::~CMVCPicture()
+{
+  context->ClearRender(this);
+  SAFE_RELEASE(context);
+}
+
+void CMVCPicture::MarkRender()
+{
+  context->MarkRender(baseView);
+  context->MarkRender(extraView);
+}
+
+//-----------------------------------------------------------------------------
+// MVC Decoder
+//-----------------------------------------------------------------------------
 CDVDVideoCodecMFX::CDVDVideoCodecMFX(CProcessInfo &processInfo) : CDVDVideoCodec(processInfo)
 {
   m_mfxSession = nullptr;
-  memset(m_pOutputQueue, 0, sizeof(m_pOutputQueue));
   memset(&m_mfxExtMVCSeq, 0, sizeof(m_mfxExtMVCSeq));
   Init();
 }
@@ -153,15 +299,15 @@ bool CDVDVideoCodecMFX::Init()
 
   // query actual API version
   MFXQueryVersion(m_mfxSession, &m_mfxVersion);
-  MFXQueryIMPL(m_mfxSession, &impl);
+  MFXQueryIMPL(m_mfxSession, &m_impl);
   CLog::Log(LOGNOTICE, "%s: MSDK Initialized, version %d.%d", __FUNCTION__, m_mfxVersion.Major, m_mfxVersion.Minor);
-  if ((impl & 0x0F00) == MFX_IMPL_VIA_D3D11)
+  if ((m_impl & 0xF00) == MFX_IMPL_VIA_D3D11)
     CLog::Log(LOGDEBUG, "%s: MSDK uses D3D11 API.", __FUNCTION__);
-  if ((impl & 0x0F00) == MFX_IMPL_VIA_D3D9)
+  if ((m_impl & 0xF00) == MFX_IMPL_VIA_D3D9)
     CLog::Log(LOGDEBUG, "%s: MSDK uses D3D9 API.", __FUNCTION__);
-  if ((impl & 0x0F) == MFX_IMPL_SOFTWARE)
+  if ((m_impl & 0xF) == MFX_IMPL_SOFTWARE)
     CLog::Log(LOGDEBUG, "%s: MSDK uses Pure Software Implementation.", __FUNCTION__);
-  if ((impl & 0x0F) == MFX_IMPL_HARDWARE)
+  if ((m_impl & 0xF) >= MFX_IMPL_HARDWARE)
     CLog::Log(LOGDEBUG, "%s: MSDK uses Hardware Accelerated Implementation (default device).", __FUNCTION__);
 
   return true;
@@ -178,28 +324,28 @@ void CDVDVideoCodecMFX::DestroyDecoder(bool bFull)
     m_bDecodeReady = false;
   }
 
+  while (!m_renderQueue.empty())
   {
-    CSingleLock lock(m_BufferCritSec);
-    for (int i = 0; i < ASYNC_DEPTH; i++)
-      if (m_pOutputQueue[i])
-        ReleaseBuffer(&m_pOutputQueue[i]->surface);
-
-    memset(m_pOutputQueue, 0, sizeof(m_pOutputQueue));
-    while (!m_renderQueue.empty())
-    {
-      ReleasePicture(m_renderQueue.front());
-      m_renderQueue.pop();
-    }
-    for (auto it = m_BufferQueue.begin(); it != m_BufferQueue.end(); it++) 
-    {
-      if (!(*it)->queued) 
-      {
-        av_freep(&(*it)->surface.Data.Y);
-        delete (*it);
-      }
-    }
-    m_BufferQueue.clear();
+    SAFE_RELEASE(m_renderQueue.front());
+    m_renderQueue.pop();
   }
+  while (!m_baseViewQueue.empty())
+  {
+    m_context->ReleaseBuffer(m_baseViewQueue.front());
+    m_baseViewQueue.pop();
+  }
+  while (!m_extViewQueue.empty())
+  {
+    m_context->ReleaseBuffer(m_extViewQueue.front());
+    m_extViewQueue.pop();
+  }
+  SAFE_RELEASE(m_context);
+
+  // delete frames
+  if (m_frameAllocator)
+    m_frameAllocator->Free(m_frameAllocator->pthis, &m_mfxResponse);
+
+  SAFE_DELETE(m_frameAllocator);
 
   // delete MVC sequence buffers
   SAFE_DELETE(m_mfxExtMVCSeq.View);
@@ -212,6 +358,8 @@ void CDVDVideoCodecMFX::DestroyDecoder(bool bFull)
     MFXClose(m_mfxSession);
     m_mfxSession = nullptr;
   }
+  if (m_pBuff)
+    av_freep(&m_pBuff);
 }
 
 bool CDVDVideoCodecMFX::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
@@ -229,6 +377,8 @@ bool CDVDVideoCodecMFX::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
   // Init and reset video param arrays
   memset(&m_mfxVideoParams, 0, sizeof(m_mfxVideoParams));
   m_mfxVideoParams.mfx.CodecId = MFX_CODEC_AVC;
+  m_mfxVideoParams.mfx.FrameInfo.FourCC = MFX_FOURCC_NV12;
+  //m_mfxVideoParams.mfx.MaxDecFrameBuffering = 6;
 
   memset(&m_mfxExtMVCSeq, 0, sizeof(m_mfxExtMVCSeq));
   m_mfxExtMVCSeq.Header.BufferId = MFX_EXTBUFF_MVC_SEQ_DESC;
@@ -242,6 +392,15 @@ bool CDVDVideoCodecMFX::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
   uint8_t* extradata;
   int extradata_size;
 
+  m_pBuff = (uint8_t*)av_malloc(1024 * 2048); // reserve 2Mb buffer
+  m_buffSize = 0;
+
+  for (auto it = options.m_keys.begin(); it != options.m_keys.end(); ++it)
+  {
+    if (it->m_name == "surfaces")
+      m_shared = atoi(it->m_value.c_str());
+  }
+
   // annex h
   if (hints.codec_tag == MKTAG('M', 'V', 'C', '1') &&
       CDVDCodecUtils::ProcessH264MVCExtradata((uint8_t*)hints.extradata, hints.extrasize, 
@@ -253,6 +412,8 @@ bool CDVDVideoCodecMFX::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
 
     m_pAnnexBConverter = new CAnnexBConverter();
     m_pAnnexBConverter->SetNALUSize(2);
+
+    m_context = new CMVCContext();
 
     int result = Decode(pSequenceHeader, cbSequenceHeader, DVD_NOPTS_VALUE, DVD_NOPTS_VALUE);
 
@@ -269,6 +430,8 @@ bool CDVDVideoCodecMFX::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
     // annex b
     if (hints.extradata && hints.extrasize > 0)
     {
+      m_context = new CMVCContext();
+
       int result = Decode((uint8_t*)hints.extradata, hints.extrasize, DVD_NOPTS_VALUE, DVD_NOPTS_VALUE);
       if (result == VC_ERROR)
         goto fail;
@@ -280,6 +443,7 @@ bool CDVDVideoCodecMFX::Open(CDVDStreamInfo &hints, CDVDCodecOptions &options)
 fail:
   // reset stereo mode if it was set
   hints.stereo_mode = "mono";
+  av_freep(&m_pBuff);
   return false;
 }
 
@@ -314,61 +478,84 @@ bool CDVDVideoCodecMFX::AllocateMVCExtBuffers()
   return true;
 }
 
-MVCBuffer * CDVDVideoCodecMFX::GetBuffer()
+bool CDVDVideoCodecMFX::AllocateFrames()
 {
-  CSingleLock lock(m_BufferCritSec);
-  MVCBuffer *pBuffer = nullptr;
-  for (auto it = m_BufferQueue.begin(); it != m_BufferQueue.end(); it++) 
+  mfxStatus sts = MFX_ERR_NONE;
+  bool bDecOutSysmem = (m_impl & MFX_IMPL_SOFTWARE);
+
+  m_mfxVideoParams.IOPattern = bDecOutSysmem ? MFX_IOPATTERN_OUT_SYSTEM_MEMORY : MFX_IOPATTERN_OUT_VIDEO_MEMORY;
+  m_mfxVideoParams.AsyncDepth = ASYNC_DEPTH - 2;
+
+  // need to set device before query
+#ifdef TARGET_WINDOWS
+  sts = MFXVideoCORE_SetHandle(m_mfxSession, MFX_HANDLE_D3D11_DEVICE, g_Windowing.Get3D11Device());
+#elif
+  // TODO linux device handle
+#endif
+  MSDK_CHECK_RESULT(sts, MFX_ERR_NONE);
+
+  mfxFrameAllocRequest  mfxRequest;
+  memset(&mfxRequest, 0, sizeof(mfxFrameAllocRequest));
+  memset(&m_mfxResponse, 0, sizeof(mfxFrameAllocResponse));
+
+  sts = MFXVideoDECODE_Query(m_mfxSession, &m_mfxVideoParams, &m_mfxVideoParams);
+  MSDK_IGNORE_RESULT(sts, MFX_WRN_INCOMPATIBLE_VIDEO_PARAM);
+  MSDK_CHECK_RESULT(sts, MFX_ERR_NONE);
+
+  // calculate number of surfaces required for decoder
+  sts = MFXVideoDECODE_QueryIOSurf(m_mfxSession, &m_mfxVideoParams, &mfxRequest);
+  if (sts == MFX_WRN_PARTIAL_ACCELERATION)
   {
-    if (!(*it)->surface.Data.Locked && !(*it)->queued) 
-    {
-      pBuffer = *it;
-      break;
-    }
+    CLog::Log(LOGWARNING, "%s: SW implementation will be used instead of the HW implementation (%d).", __FUNCTION__, sts);
+    bDecOutSysmem = true;
+    MSDK_IGNORE_RESULT(sts, MFX_WRN_PARTIAL_ACCELERATION);
+  }
+  MSDK_CHECK_RESULT(sts, MFX_ERR_NONE);
+
+  if ((mfxRequest.NumFrameSuggested < m_mfxVideoParams.AsyncDepth) &&
+    (m_impl & MFX_IMPL_HARDWARE_ANY))
+    return false;
+
+  // re-calculate number of surfaces required for decoder in case MFX_WRN_PARTIAL_ACCELERATION
+  if (bDecOutSysmem && m_mfxVideoParams.IOPattern == MFX_IOPATTERN_OUT_VIDEO_MEMORY)
+  {
+    m_mfxVideoParams.IOPattern = MFX_IOPATTERN_OUT_SYSTEM_MEMORY;
+    sts = MFXVideoDECODE_QueryIOSurf(m_mfxSession, &m_mfxVideoParams, &mfxRequest);
   }
 
-  if (!pBuffer) 
+  MFX::mfxAllocatorParams *pParams = nullptr;
+  m_frameAllocator = new MFX::GeneralAllocator();
+#ifdef TARGET_WINDOWS
+  if (!bDecOutSysmem)
   {
-    pBuffer = new MVCBuffer();
-
-    pBuffer->surface.Info = m_mfxVideoParams.mfx.FrameInfo;
-    pBuffer->surface.Info.FourCC = MFX_FOURCC_NV12;
-
-    pBuffer->surface.Data.PitchLow = FFALIGN(m_mfxVideoParams.mfx.FrameInfo.Width, 64);
-    pBuffer->surface.Data.Y = (mfxU8 *)av_malloc(pBuffer->surface.Data.PitchLow * FFALIGN(m_mfxVideoParams.mfx.FrameInfo.Height, 64) * 3 / 2);
-    pBuffer->surface.Data.UV = pBuffer->surface.Data.Y + (pBuffer->surface.Data.PitchLow * FFALIGN(m_mfxVideoParams.mfx.FrameInfo.Height, 64));
-
-    m_BufferQueue.push_back(pBuffer);
-    CLog::Log(LOGDEBUG, "Allocated new MSDK MVC buffer (%d total)", m_BufferQueue.size());
+    MFX::D3D11AllocatorParams *pD3DParams = new MFX::D3D11AllocatorParams;
+    pD3DParams->pDevice = g_Windowing.Get3D11Device();
+    pD3DParams->bUseSingleTexture = true;
+    pParams = pD3DParams;
   }
+#elif
+  // TODO linux allocator
+#endif
+  sts = m_frameAllocator->Init(pParams);
+  MSDK_CHECK_RESULT(sts, MFX_ERR_NONE);
 
-  return pBuffer;
-}
+  uint8_t shared = ASYNC_DEPTH + 2; // +2 for safety
+  if (!bDecOutSysmem)
+    shared += m_shared * 2; // m_shared * 2 buffers for sharing
 
-MVCBuffer * CDVDVideoCodecMFX::FindBuffer(mfxFrameSurface1 * pSurface)
-{
-  CSingleLock lock(m_BufferCritSec);
-  bool bFound = false;
-  for (auto it = m_BufferQueue.begin(); it != m_BufferQueue.end(); it++) 
-    if (&(*it)->surface == pSurface)
-      return *it;
+  uint16_t toAllocate = mfxRequest.NumFrameSuggested + shared;
+  CLog::Log(LOGDEBUG, "%s: Decoder suggested (%d) frames to use. creating (%d) buffers.", __FUNCTION__, mfxRequest.NumFrameSuggested, toAllocate);
 
-  return nullptr;
-}
+  mfxRequest.NumFrameSuggested = toAllocate;
+  sts = m_frameAllocator->Alloc(m_frameAllocator->pthis, &mfxRequest, &m_mfxResponse);
+  MSDK_CHECK_RESULT(sts, MFX_ERR_NONE);
 
-void CDVDVideoCodecMFX::ReleaseBuffer(mfxFrameSurface1 * pSurface)
-{
-  if (!pSurface)
-    return;
+  m_context->AllocateBuffers(m_mfxVideoParams.mfx.FrameInfo, m_mfxResponse.NumFrameActual, m_mfxResponse.mids);
 
-  CSingleLock lock(m_BufferCritSec);
-  MVCBuffer * pBuffer = FindBuffer(pSurface);
+  sts = MFXVideoCORE_SetFrameAllocator(m_mfxSession, m_frameAllocator);
+  MSDK_CHECK_RESULT(sts, MFX_ERR_NONE);
 
-  if (pBuffer) 
-  {
-    pBuffer->queued = false;
-    pBuffer->sync = nullptr;
-  }
+  return true;
 }
 
 int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pts)
@@ -377,53 +564,44 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
     return VC_ERROR;
 
   mfxStatus sts = MFX_ERR_NONE;
-  mfxBitstream bs = { 0 };
+  mfxBitstream bs = { { { 0 } } };;
   bool bBuffered = false, bFlush = (buffer == nullptr);
-  int result = 0; 
 
-  double ts = pts != DVD_NOPTS_VALUE ? pts : dts;
-  if (pts >= 0 && pts != DVD_NOPTS_VALUE)
-    bs.TimeStamp = static_cast<mfxU64>(round(pts));
-  else
-    bs.TimeStamp = MFX_TIMESTAMP_UNKNOWN;
-  if (dts >= 0 && dts != DVD_NOPTS_VALUE)
-    bs.DecodeTimeStamp = static_cast<mfxU64>(round(dts));
-  else
-    bs.DecodeTimeStamp = MFX_TIMESTAMP_UNKNOWN;
-  //bs.DecodeTimeStamp = MFX_TIMESTAMP_UNKNOWN;
+  bs.DecodeTimeStamp = (dts == DVD_NOPTS_VALUE) ? MFX_TIMESTAMP_UNKNOWN : (mfxI64)dts;
+  bs.TimeStamp       = (pts == DVD_NOPTS_VALUE) ? MFX_TIMESTAMP_UNKNOWN : (mfxU64)pts;
 
-  if (!bFlush) 
+  if (!bFlush)
   {
-    if (m_pAnnexBConverter) 
+    if (m_pAnnexBConverter)
     {
-      BYTE *pOutBuffer = nullptr;
+      uint8_t *pOutBuffer = nullptr;
       int pOutSize = 0;
       if (!m_pAnnexBConverter->Convert(&pOutBuffer, &pOutSize, buffer, buflen))
         return VC_ERROR;
 
-      m_buff.reserve(m_buff.size() + pOutSize);
-      std::copy(pOutBuffer, pOutBuffer + pOutSize, std::back_inserter(m_buff));
+      memmove(m_pBuff + m_buffSize, pOutBuffer, pOutSize);
+      m_buffSize += pOutSize;
       av_freep(&pOutBuffer);
     }
     else
     {
-      m_buff.reserve(m_buff.size() + buflen);
-      std::copy(buffer, buffer + buflen, std::back_inserter(m_buff));
+      memmove(m_pBuff + m_buffSize, buffer, buflen);
+      m_buffSize += buflen;
     }
 
     CH264Nalu nalu;
-    nalu.SetBuffer(m_buff.data(), m_buff.size(), 0);
-    while (nalu.ReadNext()) 
+    nalu.SetBuffer(m_pBuff, m_buffSize, 0);
+    while (nalu.ReadNext())
     {
-      if (nalu.GetType() == NALU_TYPE_EOSEQ) 
+      if (nalu.GetType() == NALU_TYPE_EOSEQ)
       {
         // This is rather ugly, and relies on the bitstream being AnnexB, so simply overwriting the EOS NAL with zero works.
         // In the future a more elaborate bitstream filter might be advised
-        memset(m_buff.data() + nalu.GetNALPos(), 0, 4);
+        memset(m_pBuff + nalu.GetNALPos(), 0, 4);
       }
     }
-    bs.Data = m_buff.data();
-    bs.DataLength = m_buff.size();
+    bs.Data = m_pBuff;
+    bs.DataLength = m_buffSize;
     bs.MaxLength = bs.DataLength;
   }
 
@@ -445,16 +623,16 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
     if (sts == MFX_ERR_MORE_DATA)
     {
       CLog::Log(LOGDEBUG, "%s: No enought data to init decoder (%d)", __FUNCTION__, sts);
-      m_buff.clear();
+      m_buffSize = 0;
       return VC_BUFFER;
     }
     if (sts == MFX_ERR_NONE) 
     {
-      m_mfxVideoParams.IOPattern = MFX_IOPATTERN_OUT_SYSTEM_MEMORY;
-      m_mfxVideoParams.AsyncDepth = ASYNC_DEPTH - 2;
+      if (!AllocateFrames())
+        return VC_ERROR;
 
       sts = MFXVideoDECODE_Init(m_mfxSession, &m_mfxVideoParams);
-      if (sts != MFX_ERR_NONE && sts != MFX_WRN_PARTIAL_ACCELERATION)
+      if (sts < 0)
       {
         CLog::Log(LOGERROR, "%s: Error initializing the MSDK decoder (%d)", __FUNCTION__, sts);
         return VC_ERROR;
@@ -469,7 +647,6 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
       }
 
       CLog::Log(LOGDEBUG, "%s: Initialized MVC with View Ids %d, %d", __FUNCTION__, m_mfxExtMVCSeq.View[0].ViewId, m_mfxExtMVCSeq.View[1].ViewId);
-
       m_bDecodeReady = true;
     }
   }
@@ -478,12 +655,13 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
     return VC_ERROR;
 
   mfxSyncPoint sync = nullptr;
+  int resetCount = 0;
 
   // Loop over the decoder to ensure all data is being consumed
-  XbmcThreads::EndTime timeout(50); // timeout for DEVICE_BUSY state.
+  XbmcThreads::EndTime timeout(25); // timeout for DEVICE_BUSY state.
   while (1) 
   {
-    MVCBuffer *pInputBuffer = GetBuffer();
+    MVCBuffer *pInputBuffer = m_context->GetFree();
     mfxFrameSurface1 *outsurf = nullptr;
     sts = MFXVideoDECODE_DecodeFrameAsync(m_mfxSession, bFlush ? nullptr : &bs, &pInputBuffer->surface, &outsurf, &sync);
 
@@ -491,16 +669,24 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
     {
       if (timeout.IsTimePast())
       {
-        CLog::Log(LOGERROR, "%s: Decoder did not respond within possible time, resetting decoder.", __FUNCTION__);
-        return VC_FLUSHED;
+        if (resetCount >= 1)
+        {
+          CLog::Log(LOGERROR, "%s: Decoder did not respond after reset, flushing decoder.", __FUNCTION__);
+          return VC_FLUSHED;
+        }
+        CLog::Log(LOGWARNING, "%s: Decoder did not respond within possible time, resetting decoder.", __FUNCTION__);
+
+        MFXVideoDECODE_Reset(m_mfxSession, &m_mfxVideoParams);
+        resetCount++;
       }
-      Sleep(10);
+      Sleep(5);
       continue;
     }
-
+    // reset timeout timer
+    timeout.Set(25);
     if (sts == MFX_ERR_INCOMPATIBLE_VIDEO_PARAM)
     {
-      m_buff.clear();
+      m_buffSize = 0;
       bFlush = true;
       m_bDecodeReady = false;
       continue;
@@ -508,10 +694,7 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
 
     if (sync) 
     {
-      MVCBuffer * pOutputBuffer = FindBuffer(outsurf);
-      pOutputBuffer->queued = true;
-      pOutputBuffer->sync = sync;
-      result |= HandleOutput(pOutputBuffer);
+      HandleOutput(m_context->MarkQueued(outsurf, sync));
       continue;
     }
 
@@ -522,59 +705,74 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
   if (!bs.DataOffset && !sync && !bFlush) 
   {
     CLog::Log(LOGERROR, "%s: Decoder did not consume any data, discarding", __FUNCTION__);
-    bs.DataOffset = m_buff.size();
+    bs.DataOffset = m_buffSize;
   }
 
-  if (bs.DataOffset < m_buff.size()) 
+  if (bs.DataOffset < m_buffSize)
   {
-    BYTE *p = m_buff.data();
-    memmove(p, p + bs.DataOffset, m_buff.size() - bs.DataOffset);
-    m_buff.resize(m_buff.size() - bs.DataOffset);
+    BYTE *p = m_pBuff;
+    memmove(p, p + bs.DataOffset, m_buffSize - bs.DataOffset);
+    m_buffSize -= bs.DataOffset;
   }
-  else 
-  {
-    m_buff.clear();
-  }
+  else
+    m_buffSize = 0;
+
+  int result = 0;
 
   if (sts != MFX_ERR_MORE_DATA && sts < 0)
   {
     CLog::Log(LOGERROR, "%s: Error from Decode call (%d)", __FUNCTION__, sts);
     result = VC_ERROR;
   }
-  else if (sts == MFX_ERR_MORE_DATA)
-    result |= VC_BUFFER;
 
+  if (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN) 
+    FlushQueue();
   if (!m_renderQueue.empty())
     result |= VC_PICTURE;
+  if (sts == MFX_ERR_MORE_DATA && !(m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
+    result |= VC_BUFFER;
+  else if (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN && !result)
+    result |= VC_BUFFER;
 
   return result;
 }
 
 int CDVDVideoCodecMFX::HandleOutput(MVCBuffer * pOutputBuffer)
 {
-  int result = VC_BUFFER;
-  int nCur = m_nOutputQueuePosition, nNext = (m_nOutputQueuePosition + 1) % ASYNC_DEPTH;
+  if (pOutputBuffer->surface.Info.FrameId.ViewId == 0)
+    m_baseViewQueue.push(pOutputBuffer);
+  else if (pOutputBuffer->surface.Info.FrameId.ViewId > 0)
+    m_extViewQueue.push(pOutputBuffer);
 
-  if (m_pOutputQueue[nCur] && m_pOutputQueue[nNext]) 
+  // process output if queue is full
+  while (m_baseViewQueue.size() >= ASYNC_DEPTH >> 1 
+      && m_extViewQueue.size()  >= ASYNC_DEPTH >> 1 )
+      ProcessOutput();
+
+  return 0;
+}
+
+void CDVDVideoCodecMFX::ProcessOutput()
+{
+  MVCBuffer* pBaseView = m_baseViewQueue.front();
+  MVCBuffer* pExtraView = m_extViewQueue.front();
+  if (pBaseView->surface.Data.FrameOrder == pExtraView->surface.Data.FrameOrder)
   {
-    SyncOutput(m_pOutputQueue[nCur], m_pOutputQueue[nNext]);
-    m_pOutputQueue[nCur] = nullptr;
-    m_pOutputQueue[nNext] = nullptr;
-    result |= VC_PICTURE;
+    SyncOutput(pBaseView, pExtraView);
+    m_baseViewQueue.pop();
+    m_extViewQueue.pop();
   }
-  else if (m_pOutputQueue[nCur]) 
+  // drop unpaired frames
+  else if (pBaseView->surface.Data.FrameOrder < pExtraView->surface.Data.FrameOrder)
   {
-    CLog::Log(LOGDEBUG, "%s: Dropping unpaired frame", __FUNCTION__);
-
-    ReleaseBuffer(&m_pOutputQueue[nCur]->surface);
-    m_pOutputQueue[nCur]->sync = nullptr;
-    m_pOutputQueue[nCur] = nullptr;
+    m_context->ReleaseBuffer(pBaseView);
+    m_baseViewQueue.pop();
   }
-
-  m_pOutputQueue[nCur] = pOutputBuffer;
-  m_nOutputQueuePosition = nNext;
-
-  return result;
+  else if (pBaseView->surface.Data.FrameOrder > pExtraView->surface.Data.FrameOrder)
+  {
+    m_context->ReleaseBuffer(pExtraView);
+    m_extViewQueue.pop();
+  }
 }
 
 #define RINT(x) ((x) >= 0 ? ((int)((x) + 0.5)) : ((int)((x) - 0.5)))
@@ -585,13 +783,30 @@ bool CDVDVideoCodecMFX::GetPicture(DVDVideoPicture* pDvdVideoPicture)
 
   if (!m_renderQueue.empty())
   {
+    bool useSysMem = m_mfxVideoParams.IOPattern == MFX_IOPATTERN_OUT_SYSTEM_MEMORY;
+
     CMVCPicture* pRenderPicture = m_renderQueue.front();
     MVCBuffer* pBaseView = pRenderPicture->baseView, *pExtraView = pRenderPicture->extraView;
+    mfxHDL pthis = m_frameAllocator->pthis;
+
+    if (useSysMem)
+    {
+      // get sysmem pointers
+      m_frameAllocator->Lock(pthis, pBaseView->surface.Data.MemId, &pBaseView->surface.Data);
+      m_frameAllocator->Lock(pthis, pExtraView->surface.Data.MemId, &pExtraView->surface.Data);
+    }
+    else 
+    {
+      // get HW references
+      m_frameAllocator->GetHDL(pthis, pBaseView->surface.Data.MemId, reinterpret_cast<mfxHDL*>(&pRenderPicture->baseHNDL));
+      m_frameAllocator->GetHDL(pthis, pExtraView->surface.Data.MemId, reinterpret_cast<mfxHDL*>(&pRenderPicture->extHNDL));
+    }
 
     DVDVideoPicture* pFrame = pDvdVideoPicture;
     pFrame->iWidth = pBaseView->surface.Info.Width;
     pFrame->iHeight = pBaseView->surface.Info.Height;
     pFrame->format = RENDER_FMT_MSDK_MVC;
+    pFrame->extended_format = !useSysMem ? RENDER_FMT_DXVA : RENDER_FMT_NONE;
 
     double aspect_ratio;
     if (pBaseView->surface.Info.AspectRatioH == 0)
@@ -613,16 +828,15 @@ bool CDVDVideoCodecMFX::GetPicture(DVDVideoPicture* pDvdVideoPicture)
     strncpy(pFrame->stereo_mode, m_stereoMode.c_str(), sizeof(pFrame->stereo_mode));
     pFrame->stereo_mode[sizeof(pFrame->stereo_mode) - 1] = '\0';
     pFrame->color_range = 0;
-    pFrame->iFlags = DVP_FLAG_ALLOCATED;
+    pFrame->iFlags = DVP_FLAG_ALLOCATED | m_codecControlFlags;
     pFrame->dts = DVD_NOPTS_VALUE;
     if (!(pBaseView->surface.Data.DataFlag & MFX_FRAMEDATA_ORIGINAL_TIMESTAMP))
       pBaseView->surface.Data.TimeStamp = MFX_TIMESTAMP_UNKNOWN;
     if (pBaseView->surface.Data.TimeStamp != MFX_TIMESTAMP_UNKNOWN) 
-      pFrame->pts = static_cast<double>(pBaseView->surface.Data.TimeStamp);
+      pFrame->pts = (double)pBaseView->surface.Data.TimeStamp;
     else 
       pFrame->pts = DVD_NOPTS_VALUE;
     pFrame->mvc = pRenderPicture;
-    //pFrame->pts = DVD_NOPTS_VALUE;
 
     m_renderQueue.pop();
     return true;
@@ -634,40 +848,17 @@ bool CDVDVideoCodecMFX::ClearPicture(DVDVideoPicture* pDvdVideoPicture)
 {
   if (pDvdVideoPicture->mvc)
   {
-    CSingleLock lock(m_BufferCritSec);
-    ReleasePicture(pDvdVideoPicture->mvc);
+    MVCBuffer* pBaseView = pDvdVideoPicture->mvc->baseView, *pExtraView = pDvdVideoPicture->mvc->extraView;
+
+    if (pBaseView->surface.Data.Y || pExtraView->surface.Data.Y)
+    {
+      m_frameAllocator->Unlock(m_frameAllocator->pthis, pBaseView->surface.Data.MemId, &pBaseView->surface.Data);
+      m_frameAllocator->Unlock(m_frameAllocator->pthis, pExtraView->surface.Data.MemId, &pExtraView->surface.Data);
+    }
+
+    SAFE_RELEASE(pDvdVideoPicture->mvc);
   }
   return CDVDVideoCodec::ClearPicture(pDvdVideoPicture);
-}
-
-void CDVDVideoCodecMFX::ReleasePicture(CMVCPicture* pMVCPicture)
-{
-  CSingleLock lock(m_BufferCritSec);
-
-  MVCBuffer * pBaseBuffer = pMVCPicture->baseView;
-  MVCBuffer * pStoredBuffer = FindBuffer(&pBaseBuffer->surface);
-  if (pStoredBuffer)
-  {
-    ReleaseBuffer(&pBaseBuffer->surface);
-  }
-  else
-  {
-    av_free(pBaseBuffer->surface.Data.Y);
-    SAFE_DELETE(pBaseBuffer);
-  }
-
-  MVCBuffer * pExtraBuffer = pMVCPicture->extraView;
-  pStoredBuffer = FindBuffer(&pExtraBuffer->surface);
-  if (pStoredBuffer)
-  {
-    ReleaseBuffer(&pExtraBuffer->surface);
-  }
-  else
-  {
-    av_free(pExtraBuffer->surface.Data.Y);
-    SAFE_DELETE(pExtraBuffer);
-  }
-  SAFE_RELEASE(pMVCPicture);
 }
 
 void CDVDVideoCodecMFX::SyncOutput(MVCBuffer * pBaseView, MVCBuffer * pExtraView)
@@ -677,15 +868,15 @@ void CDVDVideoCodecMFX::SyncOutput(MVCBuffer * pBaseView, MVCBuffer * pExtraView
   assert(pBaseView->surface.Info.FrameId.ViewId == 0 && pExtraView->surface.Info.FrameId.ViewId > 0);
   assert(pBaseView->surface.Data.FrameOrder == pExtraView->surface.Data.FrameOrder);
 
-  // Sync base view
+  // sync base view
   do 
   {
     sts = MFXVideoCORE_SyncOperation(m_mfxSession, pBaseView->sync, 1000);
-  } 
+  }
   while (sts == MFX_WRN_IN_EXECUTION);
   pBaseView->sync = nullptr;
 
-  // Sync extra view
+  // sync extra view
   do 
   {
     sts = MFXVideoCORE_SyncOperation(m_mfxSession, pExtraView->sync, 1000);
@@ -693,62 +884,47 @@ void CDVDVideoCodecMFX::SyncOutput(MVCBuffer * pBaseView, MVCBuffer * pExtraView
   while (sts == MFX_WRN_IN_EXECUTION);
   pExtraView->sync = nullptr;
 
-  CMVCPicture *pRenderPicture = new CMVCPicture(pBaseView, pExtraView);
-  m_renderQueue.push(pRenderPicture);
+  m_renderQueue.push(m_context->GetPicture(pBaseView, pExtraView));
 }
 
 bool CDVDVideoCodecMFX::Flush()
 {
-  m_buff.clear();
+  m_buffSize = 0;
 
   if (m_mfxSession) 
   {
     if (m_bDecodeReady)
       MFXVideoDECODE_Reset(m_mfxSession, &m_mfxVideoParams);
+
     while (!m_renderQueue.empty())
     {
-      ReleasePicture(m_renderQueue.front());
+      SAFE_RELEASE(m_renderQueue.front());
       m_renderQueue.pop();
     }
-    // TODO: decode sequence data
-    for (int i = 0; i < ASYNC_DEPTH; i++) 
-      ReleaseBuffer(&m_pOutputQueue[i]->surface);
-
-    memset(m_pOutputQueue, 0, sizeof(m_pOutputQueue));
-    m_nOutputQueuePosition = 0;
+    while (!m_baseViewQueue.empty())
+    {
+      m_context->ReleaseBuffer(m_baseViewQueue.front());
+      m_baseViewQueue.pop();
+    }
+    while (!m_extViewQueue.empty())
+    {
+      m_context->ReleaseBuffer(m_extViewQueue.front());
+      m_extViewQueue.pop();
+    }
   }
 
   return true;
 }
 
-bool CDVDVideoCodecMFX::EndOfStream()
+bool CDVDVideoCodecMFX::FlushQueue()
 {
   if (!m_bDecodeReady)
     return false;
 
-  // Flush frames out of the decoder
-  Decode(nullptr, 0, 0, 0);
-
   // Process all remaining frames in the queue
-  for (int i = 0; i < ASYNC_DEPTH; i++) 
-  {
-    int nCur = (m_nOutputQueuePosition + i) % ASYNC_DEPTH, nNext = (m_nOutputQueuePosition + i + 1) % ASYNC_DEPTH;
-    if (m_pOutputQueue[nCur] && m_pOutputQueue[nNext]) 
-    {
-      SyncOutput(m_pOutputQueue[nCur], m_pOutputQueue[nNext]);
-      m_pOutputQueue[nCur] = nullptr;
-      m_pOutputQueue[nNext] = nullptr;
-      i++;
-    }
-    else if (m_pOutputQueue[nCur]) 
-    {
-      CLog::Log(LOGDEBUG, "%s: Dropping unpaired frame", __FUNCTION__);
-
-      ReleaseBuffer(&m_pOutputQueue[nCur]->surface);
-      m_pOutputQueue[nCur] = nullptr;
-    }
-  }
-  m_nOutputQueuePosition = 0;
+  while(!m_baseViewQueue.empty() 
+     && !m_extViewQueue.empty()) 
+     ProcessOutput();
 
   return true;
 }
