@@ -329,18 +329,24 @@ MVCBuffer * CDVDVideoCodecMFX::GetBuffer()
 
   if (!pBuffer) 
   {
-    pBuffer = new MVCBuffer();
-
-    pBuffer->surface.Info = m_mfxVideoParams.mfx.FrameInfo;
-    pBuffer->surface.Info.FourCC = MFX_FOURCC_NV12;
-
-    pBuffer->surface.Data.PitchLow = FFALIGN(m_mfxVideoParams.mfx.FrameInfo.Width, 64);
-    pBuffer->surface.Data.Y = (mfxU8 *)av_malloc(pBuffer->surface.Data.PitchLow * FFALIGN(m_mfxVideoParams.mfx.FrameInfo.Height, 64) * 3 / 2);
-    pBuffer->surface.Data.UV = pBuffer->surface.Data.Y + (pBuffer->surface.Data.PitchLow * FFALIGN(m_mfxVideoParams.mfx.FrameInfo.Height, 64));
-
+    pBuffer = AllocateBuffer();
     m_BufferQueue.push_back(pBuffer);
     CLog::Log(LOGDEBUG, "Allocated new MSDK MVC buffer (%d total)", m_BufferQueue.size());
   }
+
+  return pBuffer;
+}
+
+MVCBuffer * CDVDVideoCodecMFX::AllocateBuffer()
+{
+  MVCBuffer *pBuffer = new MVCBuffer();
+
+  pBuffer->surface.Info = m_mfxVideoParams.mfx.FrameInfo;
+  pBuffer->surface.Info.FourCC = MFX_FOURCC_NV12;
+
+  pBuffer->surface.Data.PitchLow = FFALIGN(m_mfxVideoParams.mfx.FrameInfo.Width, 64);
+  pBuffer->surface.Data.Y = (mfxU8 *)av_malloc(pBuffer->surface.Data.PitchLow * FFALIGN(m_mfxVideoParams.mfx.FrameInfo.Height, 64) * 3 / 2);
+  pBuffer->surface.Data.UV = pBuffer->surface.Data.Y + (pBuffer->surface.Data.PitchLow * FFALIGN(m_mfxVideoParams.mfx.FrameInfo.Height, 64));
 
   return pBuffer;
 }
@@ -379,9 +385,9 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
   mfxStatus sts = MFX_ERR_NONE;
   mfxBitstream bs = { 0 };
   bool bBuffered = false, bFlush = (buffer == nullptr);
-  int result = 0; 
 
-  double ts = pts != DVD_NOPTS_VALUE ? pts : dts;
+  //bs.DecodeTimeStamp = MFX_TIMESTAMP_UNKNOWN;
+  //double ts = pts != DVD_NOPTS_VALUE ? pts : dts;
   if (pts >= 0 && pts != DVD_NOPTS_VALUE)
     bs.TimeStamp = static_cast<mfxU64>(round(pts));
   else
@@ -390,11 +396,10 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
     bs.DecodeTimeStamp = static_cast<mfxU64>(round(dts));
   else
     bs.DecodeTimeStamp = MFX_TIMESTAMP_UNKNOWN;
-  //bs.DecodeTimeStamp = MFX_TIMESTAMP_UNKNOWN;
 
-  if (!bFlush) 
+  if (!bFlush)
   {
-    if (m_pAnnexBConverter) 
+    if (m_pAnnexBConverter)
     {
       BYTE *pOutBuffer = nullptr;
       int pOutSize = 0;
@@ -413,9 +418,9 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
 
     CH264Nalu nalu;
     nalu.SetBuffer(m_buff.data(), m_buff.size(), 0);
-    while (nalu.ReadNext()) 
+    while (nalu.ReadNext())
     {
-      if (nalu.GetType() == NALU_TYPE_EOSEQ) 
+      if (nalu.GetType() == NALU_TYPE_EOSEQ)
       {
         // This is rather ugly, and relies on the bitstream being AnnexB, so simply overwriting the EOS NAL with zero works.
         // In the future a more elaborate bitstream filter might be advised
@@ -453,8 +458,28 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
       m_mfxVideoParams.IOPattern = MFX_IOPATTERN_OUT_SYSTEM_MEMORY;
       m_mfxVideoParams.AsyncDepth = ASYNC_DEPTH - 2;
 
+      mfxFrameAllocRequest mfxRequest;
+      memset(&mfxRequest, 0, sizeof(mfxFrameAllocRequest));
+
+      sts = MFXVideoDECODE_Query(m_mfxSession, &m_mfxVideoParams, &m_mfxVideoParams);
+      if (sts != MFX_ERR_NONE && sts != MFX_WRN_INCOMPATIBLE_VIDEO_PARAM)
+      {
+        CLog::Log(LOGERROR, "%s: Error initializing the MSDK decoder (%d)", __FUNCTION__, sts);
+        return VC_ERROR;
+      }
+
+      // calculate number of surfaces required for decoder
+      sts = MFXVideoDECODE_QueryIOSurf(m_mfxSession, &m_mfxVideoParams, &mfxRequest);
+      if (sts == MFX_WRN_PARTIAL_ACCELERATION)
+        CLog::Log(LOGWARNING, "%s: SW implementation will be used instead of the HW implementation (%d).", __FUNCTION__, sts);
+
+      size_t size = mfxRequest.NumFrameSuggested + 2 * 3; // +3 frames for safety
+      CLog::Log(LOGDEBUG, "%s: Decoder suggested (%d) frames to use. creating (%d) buffers.", __FUNCTION__, mfxRequest.NumFrameSuggested, size);
+      while (m_BufferQueue.size() < size)
+        m_BufferQueue.push_back(AllocateBuffer()); 
+
       sts = MFXVideoDECODE_Init(m_mfxSession, &m_mfxVideoParams);
-      if (sts != MFX_ERR_NONE && sts != MFX_WRN_PARTIAL_ACCELERATION)
+      if (sts < 0)
       {
         CLog::Log(LOGERROR, "%s: Error initializing the MSDK decoder (%d)", __FUNCTION__, sts);
         return VC_ERROR;
@@ -469,7 +494,6 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
       }
 
       CLog::Log(LOGDEBUG, "%s: Initialized MVC with View Ids %d, %d", __FUNCTION__, m_mfxExtMVCSeq.View[0].ViewId, m_mfxExtMVCSeq.View[1].ViewId);
-
       m_bDecodeReady = true;
     }
   }
@@ -478,9 +502,10 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
     return VC_ERROR;
 
   mfxSyncPoint sync = nullptr;
+  int resetCount = 0;
 
   // Loop over the decoder to ensure all data is being consumed
-  XbmcThreads::EndTime timeout(50); // timeout for DEVICE_BUSY state.
+  XbmcThreads::EndTime timeout(25); // timeout for DEVICE_BUSY state.
   while (1) 
   {
     MVCBuffer *pInputBuffer = GetBuffer();
@@ -491,13 +516,21 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
     {
       if (timeout.IsTimePast())
       {
-        CLog::Log(LOGERROR, "%s: Decoder did not respond within possible time, resetting decoder.", __FUNCTION__);
-        return VC_FLUSHED;
+        if (resetCount >= 1)
+        {
+          CLog::Log(LOGERROR, "%s: Decoder did not respond after reset, flushing decoder.", __FUNCTION__);
+          return VC_FLUSHED;
+        }
+        CLog::Log(LOGWARNING, "%s: Decoder did not respond within possible time, resetting decoder.", __FUNCTION__);
+
+        MFXVideoDECODE_Reset(m_mfxSession, &m_mfxVideoParams);
+        resetCount++;
       }
       Sleep(10);
       continue;
     }
-
+    // reset timeout timer
+    timeout.Set(25);
     if (sts == MFX_ERR_INCOMPATIBLE_VIDEO_PARAM)
     {
       m_buff.clear();
@@ -511,7 +544,7 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
       MVCBuffer * pOutputBuffer = FindBuffer(outsurf);
       pOutputBuffer->queued = true;
       pOutputBuffer->sync = sync;
-      result |= HandleOutput(pOutputBuffer);
+      HandleOutput(pOutputBuffer);
       continue;
     }
 
@@ -532,27 +565,28 @@ int CDVDVideoCodecMFX::Decode(uint8_t* buffer, int buflen, double dts, double pt
     m_buff.resize(m_buff.size() - bs.DataOffset);
   }
   else 
-  {
     m_buff.clear();
-  }
+
+  int result = 0;
 
   if (sts != MFX_ERR_MORE_DATA && sts < 0)
   {
     CLog::Log(LOGERROR, "%s: Error from Decode call (%d)", __FUNCTION__, sts);
     result = VC_ERROR;
   }
-  else if (sts == MFX_ERR_MORE_DATA)
-    result |= VC_BUFFER;
 
   if (!m_renderQueue.empty())
     result |= VC_PICTURE;
+  if (sts == MFX_ERR_MORE_DATA && !(m_codecControlFlags & DVD_CODEC_CTRL_DRAIN))
+    result |= VC_BUFFER;
+  else if (m_codecControlFlags & DVD_CODEC_CTRL_DRAIN && !result)
+    result |= VC_BUFFER;
 
   return result;
 }
 
 int CDVDVideoCodecMFX::HandleOutput(MVCBuffer * pOutputBuffer)
 {
-  int result = VC_BUFFER;
   int nCur = m_nOutputQueuePosition, nNext = (m_nOutputQueuePosition + 1) % ASYNC_DEPTH;
 
   if (m_pOutputQueue[nCur] && m_pOutputQueue[nNext]) 
@@ -560,7 +594,6 @@ int CDVDVideoCodecMFX::HandleOutput(MVCBuffer * pOutputBuffer)
     SyncOutput(m_pOutputQueue[nCur], m_pOutputQueue[nNext]);
     m_pOutputQueue[nCur] = nullptr;
     m_pOutputQueue[nNext] = nullptr;
-    result |= VC_PICTURE;
   }
   else if (m_pOutputQueue[nCur]) 
   {
@@ -574,7 +607,7 @@ int CDVDVideoCodecMFX::HandleOutput(MVCBuffer * pOutputBuffer)
   m_pOutputQueue[nCur] = pOutputBuffer;
   m_nOutputQueuePosition = nNext;
 
-  return result;
+  return 0;
 }
 
 #define RINT(x) ((x) >= 0 ? ((int)((x) + 0.5)) : ((int)((x) - 0.5)))
@@ -622,7 +655,6 @@ bool CDVDVideoCodecMFX::GetPicture(DVDVideoPicture* pDvdVideoPicture)
     else 
       pFrame->pts = DVD_NOPTS_VALUE;
     pFrame->mvc = pRenderPicture;
-    //pFrame->pts = DVD_NOPTS_VALUE;
 
     m_renderQueue.pop();
     return true;
@@ -716,6 +748,9 @@ bool CDVDVideoCodecMFX::Flush()
 
     memset(m_pOutputQueue, 0, sizeof(m_pOutputQueue));
     m_nOutputQueuePosition = 0;
+
+    if (m_bDecodeReady)
+      MFXVideoDECODE_Init(m_mfxSession, &m_mfxVideoParams);
   }
 
   return true;

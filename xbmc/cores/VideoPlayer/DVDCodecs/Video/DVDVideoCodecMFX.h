@@ -142,9 +142,9 @@ public:
   virtual void SetDropState(bool bDrop) {};
   virtual const char* GetName() { return "msdk-mvc"; };
 
-  virtual bool GetCodecStats(double &pts, int &droppedPics, int &skippedPics) override { return true; };
   virtual bool ClearPicture(DVDVideoPicture* pDvdVideoPicture) override;
   void ReleasePicture(CMVCPicture* pMVCPicture);
+  virtual void SetCodecControl(int flags) override { m_codecControlFlags = flags; }
 
 private:
   bool Init();
@@ -160,6 +160,7 @@ private:
 
   int HandleOutput(MVCBuffer * pOutputBuffer);
   void SyncOutput(MVCBuffer * pBaseView, MVCBuffer * pExtraView);
+  MVCBuffer * AllocateBuffer();
 
 private:
 
@@ -182,4 +183,5 @@ private:
   int                  m_nOutputQueuePosition = 0;
   std::queue<CMVCPicture*> m_renderQueue;
   std::string          m_stereoMode;
+  int                  m_codecControlFlags = 0;
 };
