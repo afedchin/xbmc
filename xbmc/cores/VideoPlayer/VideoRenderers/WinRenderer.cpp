@@ -1134,7 +1134,7 @@ CRenderInfo CWinRenderer::GetRenderInfo()
   if (m_renderMethod == RENDER_DXVA && m_processor)
     info.optimal_buffer_size = m_processor->Size();
   else
-    info.optimal_buffer_size = 3;
+    info.optimal_buffer_size = m_format == RENDER_FMT_MSDK_MVC ? 4 : 3;
   return info;
 }
 
