@@ -21,6 +21,9 @@
 
 #include "WinSystemWin32DX.h"
 #include "guilib/gui3d.h"
+#include "guilib/GraphicContext.h"
+#include "settings/AdvancedSettings.h"
+#include "settings/DisplaySettings.h"
 #include "settings/Settings.h"
 #include "threads/SingleLock.h"
 #include "utils/CharsetConverter.h"
@@ -127,6 +130,13 @@ bool CWinSystemWin32DX::SetFullScreen(bool fullScreen, RESOLUTION_INFO& res, boo
 
     if (GetKeyboardState((LPBYTE)&keyState) && !(keyState[VK_MENU] & 0x80))
       keybd_event(VK_MENU, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+  }
+
+  if (g_advancedSettings.m_forceModeChangeBeforeHWStereo &&
+      g_graphicsContext.GetStereoMode() == RENDER_STEREO_MODE_HARDWAREBASED)
+  {
+    // most 3D content has 23.976fps, so switch for this mode
+    res = CDisplaySettings::GetInstance().GetResolutionInfo(CResolutionUtils::ChooseBestResolution(24000.0f / 1001.0f, res.iWidth, true));
   }
 
   // to disable stereo mode in windowed mode we must recreate swapchain and then change display mode
