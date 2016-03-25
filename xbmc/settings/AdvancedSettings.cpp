@@ -396,6 +396,9 @@ void CAdvancedSettings::Initialize()
   m_stereoscopicregex_tab = "[-. _]h?tab[-. _]";
   m_stereoscopicregex_mvc = "[-. _]mvc[-. _]";
 
+  m_useDisplayControlHWStereo = false;
+  m_forceModeChangeBeforeHWStereo = false;
+
   m_videoAssFixedWorks = false;
 
   m_logLevelHint = m_logLevel = LOG_LEVEL_NORMAL;
@@ -639,6 +642,9 @@ void CAdvancedSettings::ParseSettingsFile(const std::string &file)
 
         pRefreshFallback = pRefreshFallback->NextSiblingElement("fallback");
       }
+
+      XMLUtils::GetBoolean(pElement, "usedisplaycontrolhwstereo", m_useDisplayControlHWStereo);
+      XMLUtils::GetBoolean(pElement, "forcemodechangebeforestereo", m_forceModeChangeBeforeHWStereo);
     }
 
     m_DXVACheckCompatibilityPresent = XMLUtils::GetBoolean(pElement,"checkdxvacompatibility", m_DXVACheckCompatibility);
