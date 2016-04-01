@@ -266,6 +266,13 @@ bool CProcessorHD::ConfigureProcessor(unsigned int format, unsigned int extended
       CLog::Log(LOGERROR, "%s - Unsupported input format.", __FUNCTION__);
       return false;
     }
+    m_eViewType = PROCESSOR_VIEW_TYPE_DECODER;
+  }
+  else if (format == RENDER_FMT_MSDK_MVC && extended_format == RENDER_FMT_DXVA)
+  {
+    m_eViewType = PROCESSOR_VIEW_TYPE_EXTERNAL;
+    m_textureFormat = DXGI_FORMAT_NV12;
+    return true;
   }
   else
   {
@@ -297,6 +304,8 @@ bool CProcessorHD::ConfigureProcessor(unsigned int format, unsigned int extended
 
     if (!CreateSurfaces())
       return false;
+
+    m_eViewType = PROCESSOR_VIEW_TYPE_PROCESSOR;
   }
   return true;
 }
@@ -463,6 +472,29 @@ CRenderPicture *CProcessorHD::Convert(DVDVideoPicture &picture)
   if (picture.format == RENDER_FMT_DXVA)
     return picture.dxva->Acquire();
 
+  // MVC with HW surfaces
+  if (picture.format == RENDER_FMT_MSDK_MVC && picture.extended_format == RENDER_FMT_DXVA)
+  {
+    mfxHDLPair baseHNDL = picture.stereo_mode == "mvc_rl" ? picture.mvc->extHNDL : picture.mvc->baseHNDL;
+    mfxHDLPair extHNDL = picture.stereo_mode == "mvc_rl" ? picture.mvc->baseHNDL : picture.mvc->extHNDL;
+
+    ID3D11Texture2D* pBaseTex = reinterpret_cast<ID3D11Texture2D*>(baseHNDL.first);
+    ID3D11Texture2D* pExtTex = reinterpret_cast<ID3D11Texture2D*>(extHNDL.first);
+
+    D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC pivd = { 0, D3D11_VPIV_DIMENSION_TEXTURE2D };
+    pivd.Texture2D.ArraySlice = (UINT)baseHNDL.second;
+    pivd.Texture2D.MipSlice = 0;
+
+    CRenderPicture *pPicture = new CRenderPicture(picture.mvc);
+    m_pVideoDevice->CreateVideoProcessorInputView(pBaseTex, m_pEnumerator, &pivd, reinterpret_cast<ID3D11VideoProcessorInputView**>(&pPicture->view));
+
+    pivd.Texture2D.ArraySlice = (UINT)extHNDL.second;
+    m_pVideoDevice->CreateVideoProcessorInputView(pExtTex, m_pEnumerator, &pivd, reinterpret_cast<ID3D11VideoProcessorInputView**>(&pPicture->viewEx));
+
+    picture.mvc->MarkRender();
+    return pPicture;
+  }
+
   ID3D11View *pView = m_context->GetFree(nullptr), *pViewEx = nullptr;
   if (!pView)
   {
@@ -588,39 +620,40 @@ bool CProcessorHD::ApplyFilter(D3D11_VIDEO_PROCESSOR_FILTER filter, int value, i
 ID3D11VideoProcessorInputView* CProcessorHD::GetInputView(ID3D11View* view) 
 {
   ID3D11VideoProcessorInputView* inputView = nullptr;
-  if (m_context) // we have own context so the view will be processor input view
+
+  // internal views or external views
+  if (m_eViewType == PROCESSOR_VIEW_TYPE_PROCESSOR || m_eViewType == PROCESSOR_VIEW_TYPE_EXTERNAL)
   {
     inputView = reinterpret_cast<ID3D11VideoProcessorInputView*>(view);
     inputView->AddRef(); // it will be released in Render method
-
-    return inputView;
   }
-
-  // the view came from decoder
-  ID3D11VideoDecoderOutputView* decoderView = reinterpret_cast<ID3D11VideoDecoderOutputView*>(view);
-  if (!decoderView) 
+  // the view came from dxva decoder
+  else if (m_eViewType == PROCESSOR_VIEW_TYPE_DECODER)
   {
-    CLog::Log(LOGERROR, __FUNCTION__" - cannot get view.");
-    return nullptr;
+    ID3D11VideoDecoderOutputView* decoderView = reinterpret_cast<ID3D11VideoDecoderOutputView*>(view);
+    if (!decoderView)
+    {
+      CLog::Log(LOGERROR, __FUNCTION__" - cannot get view.");
+      return nullptr;
+    }
+
+    ID3D11Resource* resource = nullptr;
+    D3D11_VIDEO_DECODER_OUTPUT_VIEW_DESC vdovd;
+    decoderView->GetDesc(&vdovd);
+    decoderView->GetResource(&resource);
+
+    D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC vpivd = { 0 };
+    vpivd.FourCC = 0; // if zero, the driver uses the DXGI format; must be 0 on level 9.x
+    vpivd.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
+    vpivd.Texture2D.ArraySlice = vdovd.Texture2D.ArraySlice;
+    vpivd.Texture2D.MipSlice = 0;
+
+    if (FAILED(m_pVideoDevice->CreateVideoProcessorInputView(resource, m_pEnumerator, &vpivd, &inputView)))
+    {
+      CLog::Log(LOGERROR, __FUNCTION__" - cannot create processor view.");
+    }
+    resource->Release();
   }
-
-  ID3D11Resource* resource = nullptr;
-  D3D11_VIDEO_DECODER_OUTPUT_VIEW_DESC vdovd;
-  decoderView->GetDesc(&vdovd);
-  decoderView->GetResource(&resource);
-
-  D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC vpivd = { 0 };
-  vpivd.FourCC = 0; // if zero, the driver uses the DXGI format; must be 0 on level 9.x
-  vpivd.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
-  vpivd.Texture2D.ArraySlice = vdovd.Texture2D.ArraySlice;
-  vpivd.Texture2D.MipSlice = 0;
-
-  if (FAILED(m_pVideoDevice->CreateVideoProcessorInputView(resource, m_pEnumerator, &vpivd, &inputView)))
-  {
-    CLog::Log(LOGERROR, __FUNCTION__" - cannot create processor view.");
-  }
-  resource->Release();
-
   return inputView;
 }
 
