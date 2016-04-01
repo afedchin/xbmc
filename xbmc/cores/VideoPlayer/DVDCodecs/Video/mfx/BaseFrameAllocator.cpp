@@ -122,11 +122,30 @@ mfxStatus BaseFrameAllocator::AllocFrames(mfxFrameAllocRequest *request, mfxFram
   if ((request->Type & MFX_MEMTYPE_EXTERNAL_FRAME) && (request->Type & MFX_MEMTYPE_FROM_DECODE))
   {
     // external decoder allocations
-    sts = AllocImpl(request, response);
-    if (sts == MFX_ERR_NONE)
+    bool foundInCache = false;
+    for (auto it = m_ExtResponses.begin(); it != m_ExtResponses.end(); ++it)
     {
-      response->AllocId = request->AllocId;
-      m_ExtResponses.push_back(*response);
+      // same decoder and same size
+      if (request->AllocId == it->AllocId)
+      {
+        // check if enough frames were allocated
+        if (request->NumFrameSuggested > it->NumFrameActual)
+          return MFX_ERR_MEMORY_ALLOC;
+
+        // return existing response
+        *response = (mfxFrameAllocResponse&)*it;
+        foundInCache = true;
+      }
+    }
+
+    if (!foundInCache)
+    {
+      sts = AllocImpl(request, response);
+      if (sts == MFX_ERR_NONE)
+      {
+        response->AllocId = request->AllocId;
+        m_ExtResponses.push_back(*response);
+      }
     }
   }
   else
