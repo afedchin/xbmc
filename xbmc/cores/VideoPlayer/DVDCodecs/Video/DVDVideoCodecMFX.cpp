@@ -164,14 +164,12 @@ MVCBuffer* CMVCContext::GetFree()
   CSingleLock lock(m_BufferCritSec);
   MVCBuffer *pBuffer = nullptr;
 
-  for (auto it = m_BufferQueue.begin(); it != m_BufferQueue.end(); it++)
-  {
-    if (!(*it)->surface.Data.Locked && !(*it)->queued && !(*it)->render)
-    {
-      pBuffer = *it;
-      break;
-    }
-  }
+  auto it = std::find_if(m_BufferQueue.begin(), m_BufferQueue.end(),
+                         [](MVCBuffer *item){
+                           return !item->surface.Data.Locked && !item->queued && !item->render;
+                         });
+  if (it != m_BufferQueue.end())
+    pBuffer = *it;
 
   if (!pBuffer)
     CLog::Log(LOGERROR, "No free buffers (%d total)", m_BufferQueue.size());
@@ -183,9 +181,12 @@ MVCBuffer* CMVCContext::FindBuffer(mfxFrameSurface1* pSurface)
 {
   CSingleLock lock(m_BufferCritSec);
   bool bFound = false;
-  for (auto it = m_BufferQueue.begin(); it != m_BufferQueue.end(); it++)
-    if (&(*it)->surface == pSurface)
-      return *it;
+  auto it = std::find_if(m_BufferQueue.begin(), m_BufferQueue.end(),
+                        [pSurface](MVCBuffer *item){
+                          return &item->surface == pSurface;
+                        });
+  if (it != m_BufferQueue.end())
+    return *it;
 
   return nullptr;
 }
@@ -296,13 +297,13 @@ bool CDVDVideoCodecMFX::Init()
   MFXQueryVersion(m_mfxSession, &m_mfxVersion);
   MFXQueryIMPL(m_mfxSession, &m_impl);
   CLog::Log(LOGNOTICE, "%s: MSDK Initialized, version %d.%d", __FUNCTION__, m_mfxVersion.Major, m_mfxVersion.Minor);
-  if ((m_impl & 0x0F00) == MFX_IMPL_VIA_D3D11)
+  if ((m_impl & 0xF00) == MFX_IMPL_VIA_D3D11)
     CLog::Log(LOGDEBUG, "%s: MSDK uses D3D11 API.", __FUNCTION__);
-  if ((m_impl & 0x0F00) == MFX_IMPL_VIA_D3D9)
+  if ((m_impl & 0xF00) == MFX_IMPL_VIA_D3D9)
     CLog::Log(LOGDEBUG, "%s: MSDK uses D3D9 API.", __FUNCTION__);
-  if ((m_impl & 0x0F) == MFX_IMPL_SOFTWARE)
+  if ((m_impl & 0xF) == MFX_IMPL_SOFTWARE)
     CLog::Log(LOGDEBUG, "%s: MSDK uses Pure Software Implementation.", __FUNCTION__);
-  if ((m_impl & 0x0F) == MFX_IMPL_HARDWARE_ANY)
+  if ((m_impl & 0xF) >= MFX_IMPL_HARDWARE)
     CLog::Log(LOGDEBUG, "%s: MSDK uses Hardware Accelerated Implementation (default device).", __FUNCTION__);
 
   return true;
