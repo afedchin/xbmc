@@ -283,6 +283,10 @@
     <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Overlay\contrib\cc_decoder708.cpp" />
     <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\DVDVideoCodec.cpp" />
     <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\DVDVideoCodecMFX.cpp" />
+    <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\BaseFrameAllocator.cpp" />
+    <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\D3D11FrameAllocator.cpp" />
+    <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\GeneralAllocator.cpp" />
+    <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\SysMemFrameAllocator.cpp" />
     <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxBXA.cpp" />
     <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxCC.cpp" />
     <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxCDDA.cpp" />
@@ -1058,6 +1062,10 @@
     <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Overlay\contrib\cc_decoder.h" />
     <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Overlay\contrib\cc_decoder708.h" />
     <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\DVDVideoCodecMFX.h" />
+    <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\BaseFrameAllocator.h" />
+    <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\D3D11FrameAllocator.h" />
+    <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\GeneralAllocator.h" />
+    <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\SysMemFrameAllocator.h" />
     <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxBXA.h" />
     <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxCC.h" />
     <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxCDDA.h" />

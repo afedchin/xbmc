@@ -448,6 +448,9 @@
     <Filter Include="games\controllers\windows">
       <UniqueIdentifier>{9e3dd585-08e1-4dae-bc21-05e49697ef94}</UniqueIdentifier>
     </Filter>
+    <Filter Include="cores\VideoPlayer\DVDCodecs\Video\mfx">
+      <UniqueIdentifier>{3b5bb20a-9d4d-4183-8d45-d5ad2dda69ba}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\xbmc\win32\pch.cpp">
@@ -3470,6 +3473,18 @@
     </ClCompile>
     <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxMVC.cpp">
       <Filter>cores\VideoPlayer\DVDDemuxers</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\BaseFrameAllocator.cpp">
+      <Filter>cores\VideoPlayer\DVDCodecs\Video\mfx</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\D3D11FrameAllocator.cpp">
+      <Filter>cores\VideoPlayer\DVDCodecs\Video\mfx</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\GeneralAllocator.cpp">
+      <Filter>cores\VideoPlayer\DVDCodecs\Video\mfx</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\SysMemFrameAllocator.cpp">
+      <Filter>cores\VideoPlayer\DVDCodecs\Video\mfx</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -6743,6 +6758,18 @@
     </ClInclude>
     <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDDemuxers\DVDDemuxMVC.h">
       <Filter>cores\VideoPlayer\DVDDemuxers</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\BaseFrameAllocator.h">
+      <Filter>cores\VideoPlayer\DVDCodecs\Video\mfx</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\D3D11FrameAllocator.h">
+      <Filter>cores\VideoPlayer\DVDCodecs\Video\mfx</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\GeneralAllocator.h">
+      <Filter>cores\VideoPlayer\DVDCodecs\Video\mfx</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\xbmc\cores\VideoPlayer\DVDCodecs\Video\mfx\SysMemFrameAllocator.h">
+      <Filter>cores\VideoPlayer\DVDCodecs\Video\mfx</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

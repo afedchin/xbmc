@@ -163,7 +163,11 @@ CDVDVideoCodec* CDVDFactoryCodec::CreateVideoCodec(CDVDStreamInfo &hint, CProces
     if (CSettings::GetInstance().GetBool("videoplayer.supportmvc") && hint.codec == AV_CODEC_ID_H264)
     {
       if (hint.codec_tag == MKTAG('M', 'V', 'C', '1') || hint.codec_tag == MKTAG('A', 'M', 'V', 'C'))
+      {
+        std::string value = StringUtils::Format("%d", info.max_buffer_size);
+        options.m_keys.push_back(CDVDCodecOption("surfaces", value));
         pCodec = OpenCodec(new CDVDVideoCodecMFX(processInfo), hint, options);
+      }
     }
 #endif
     if (pCodec)

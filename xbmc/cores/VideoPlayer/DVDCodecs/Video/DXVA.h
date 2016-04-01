@@ -28,6 +28,8 @@
 #include "libavcodec/d3d11va.h"
 #include "threads/Event.h"
 
+class CMVCPicture;
+
 namespace DXVA {
 
 #define CHECK(a) \
@@ -71,12 +73,14 @@ class CRenderPicture
   : public IDVDResourceCounted<CRenderPicture>
 {
 public:
+  CRenderPicture(CMVCPicture *pMVCPicture);
   CRenderPicture(CSurfaceContext *context);
   ~CRenderPicture();
   ID3D11View*      view = nullptr;
   ID3D11View*      viewEx = nullptr;
 protected:
   CSurfaceContext *surface_context;
+  CMVCPicture*     mvcPicture;
 };
 
 class CDecoder;

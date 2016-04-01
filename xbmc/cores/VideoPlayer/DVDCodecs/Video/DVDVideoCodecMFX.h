@@ -1,23 +1,25 @@
-/*
-*      Copyright (C) 2010-2016 Hendrik Leppkes
-*      http://www.1f0.de
-*
-*  This program is free software; you can redistribute it and/or modify
-*  it under the terms of the GNU General Public License as published by
-*  the Free Software Foundation; either version 2 of the License, or
-*  (at your option) any later version.
-*
-*  This program is distributed in the hope that it will be useful,
-*  but WITHOUT ANY WARRANTY; without even the implied warranty of
-*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*  GNU General Public License for more details.
-*
-*  You should have received a copy of the GNU General Public License along
-*  with this program; if not, write to the Free Software Foundation, Inc.,
-*  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-*/
-
 #pragma once
+/*
+ *      Copyright (C) 2010-2016 Hendrik Leppkes
+ *      http://www.1f0.de
+ *      Copyright (C) 2005-2016 Team Kodi
+ *      http://kodi.tv
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
 #include "DVDVideoCodec.h"
 #include "DVDResource.h"
 #include "threads/Event.h"
@@ -35,6 +37,7 @@ struct MVCBuffer
 {
   mfxFrameSurface1 surface;
   bool queued = false;
+  bool render = false;
   mfxSyncPoint sync = nullptr;
   MVCBuffer()
   { 
@@ -56,6 +59,28 @@ private:
 };
 
 class CDVDVideoCodecMFX;
+namespace MFX {
+  class MFXFrameAllocator;
+}
+
+class CMVCContext : public IDVDResourceCounted<CMVCContext>
+{
+public:
+  CMVCContext();
+  ~CMVCContext();
+
+  void AllocateBuffers(mfxFrameInfo &frameInfo, uint8_t numBuffers, mfxMemId* mids);
+  MVCBuffer * GetFree();
+  MVCBuffer * MarkQueued(mfxFrameSurface1 * pSurface, mfxSyncPoint sync);
+  MVCBuffer * MarkRender(MVCBuffer *pBuffer);
+  MVCBuffer * FindBuffer(mfxFrameSurface1 * pSurface);
+  CMVCPicture * GetPicture(MVCBuffer *base, MVCBuffer *extended);
+  void ClearRender(CMVCPicture *picture);
+  void ReleaseBuffer(MVCBuffer *pBuffer);
+
+  CCriticalSection m_BufferCritSec;
+  std::vector<MVCBuffer*> m_BufferQueue;
+};
 
 class CMVCPicture : 
   public IDVDResourceCounted<CMVCPicture>
@@ -63,10 +88,18 @@ class CMVCPicture :
 public:
   CMVCPicture(MVCBuffer *pBaseView, MVCBuffer* pExtraBuffer)
     : baseView(pBaseView), extraView(pExtraBuffer)
-  {};
-  ~CMVCPicture() {}
+  {
+    memset(&baseHNDL, 0, sizeof(baseHNDL));
+    memset(&extHNDL, 0, sizeof(extHNDL));
+  };
+  ~CMVCPicture();
+  void MarkRender();
+
   MVCBuffer *baseView = nullptr;
   MVCBuffer* extraView = nullptr;
+  mfxHDLPair baseHNDL;
+  mfxHDLPair extHNDL;
+  CMVCContext* context;
 };
 
 typedef enum
@@ -134,36 +167,32 @@ public:
   CDVDVideoCodecMFX(CProcessInfo &processInfo);
   virtual ~CDVDVideoCodecMFX();
 
-  virtual bool Open(CDVDStreamInfo &hints, CDVDCodecOptions &options);
-  virtual void Dispose() { DestroyDecoder(true); }
-  virtual int Decode(uint8_t* pData, int iSize, double dts, double pts);
-  virtual void Reset() { Flush(); };
-  virtual bool GetPicture(DVDVideoPicture* pDvdVideoPicture);
-  virtual void SetDropState(bool bDrop) {};
-  virtual const char* GetName() { return "msdk-mvc"; };
+  bool Open(CDVDStreamInfo &hints, CDVDCodecOptions &options) override;
+  void Dispose() override { DestroyDecoder(true); }
+  int Decode(uint8_t* pData, int iSize, double dts, double pts) override;
+  void Reset() override { Flush(); };
+  bool GetPicture(DVDVideoPicture* pDvdVideoPicture) override;
+  void SetDropState(bool bDrop) override {};
+  const char* GetName() override { return "msdk-mvc"; };
 
-  virtual bool ClearPicture(DVDVideoPicture* pDvdVideoPicture) override;
-  void ReleasePicture(CMVCPicture* pMVCPicture);
-  virtual void SetCodecControl(int flags) override { m_codecControlFlags = flags; }
+  bool ClearPicture(DVDVideoPicture* pDvdVideoPicture) override;
+  void SetCodecControl(int flags) override { m_codecControlFlags = flags; }
 
 private:
   bool Init();
   bool Flush();
-  bool EndOfStream();
+  bool FlushQueue();
   void DestroyDecoder(bool bFull);
   bool AllocateMVCExtBuffers();
+  bool AllocateFrames();
   void SetStereoMode(CDVDStreamInfo &hints);
-
-  MVCBuffer * GetBuffer();
-  MVCBuffer * FindBuffer(mfxFrameSurface1 * pSurface);
-  void ReleaseBuffer(mfxFrameSurface1 * pSurface);
-
-  int HandleOutput(MVCBuffer * pOutputBuffer);
+  int  HandleOutput(MVCBuffer * pOutputBuffer);
+  void ProcessOutput();
   void SyncOutput(MVCBuffer * pBaseView, MVCBuffer * pExtraView);
-  MVCBuffer * AllocateBuffer();
 
 private:
 
+  mfxIMPL    m_impl;
   mfxSession m_mfxSession = nullptr;
   mfxVersion m_mfxVersion;
 
@@ -173,15 +202,18 @@ private:
   mfxExtBuffer        *m_mfxExtParam[1];
   mfxExtMVCSeqDesc     m_mfxExtMVCSeq;
 
-  CCriticalSection     m_BufferCritSec;
-  std::vector<MVCBuffer*> m_BufferQueue;
-
   std::vector<BYTE>    m_buff;
   CAnnexBConverter    *m_pAnnexBConverter = nullptr;
 
-  MVCBuffer           *m_pOutputQueue[ASYNC_DEPTH];
-  int                  m_nOutputQueuePosition = 0;
+  std::queue<MVCBuffer*> m_baseViewQueue;
+  std::queue<MVCBuffer*> m_extViewQueue;
   std::queue<CMVCPicture*> m_renderQueue;
   std::string          m_stereoMode;
   int                  m_codecControlFlags = 0;
+  bool                 m_allowDrop = false;
+
+  CMVCContext*         m_context = nullptr;
+  MFX::MFXFrameAllocator *m_frameAllocator = nullptr;
+  mfxFrameAllocResponse m_mfxResponse;
+  uint8_t m_shared = 0;
 };
