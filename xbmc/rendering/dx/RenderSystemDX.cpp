@@ -831,7 +831,10 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
   {
     // notify player about display lost if it's not notified previously
     if (!m_bResizeRequred)
+    {
       OnDisplayLost();
+      m_bResizeRequred = true;
+    }
 
     BOOL fullScreen;
     m_pSwapChain1->GetFullscreenState(&fullScreen, NULL);
