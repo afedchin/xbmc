@@ -2336,7 +2336,7 @@
           <control type="list" format="string" />
         </setting>
         <setting id="videoscreen.screenmode" type="string" parent="videoscreen.screen" label="243" help="36353">
-          <requirement>IsStandAlone</requirement>
+          <!--<requirement>IsStandAlone</requirement>-->
           <level>0</level>
           <default>DESKTOP</default>
           <constraints>
