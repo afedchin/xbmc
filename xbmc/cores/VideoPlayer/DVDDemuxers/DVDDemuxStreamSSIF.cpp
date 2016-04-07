@@ -19,7 +19,7 @@
 */
 
 #include "DVDDemuxStreamSSIF.h"
-#include "DVDDemux.h"
+#include "DVDDemuxMVC.h"
 #include "DVDClock.h"
 #include "DVDDemuxUtils.h"
 #include "utils/log.h"
@@ -35,6 +35,8 @@ DemuxPacket* CDVDDemuxStreamSSIF::AddPacket(DemuxPacket* &srcPkt)
 
   if (srcPkt->iStreamId == m_h264StreamId)
   {
+    if (m_bluRay && !m_bluRay->HasExtention())
+      return srcPkt;
     m_H264queue.push(srcPkt);
   }
   else if (srcPkt->iStreamId == m_mvcStreamId)
@@ -170,7 +172,7 @@ bool CDVDDemuxStreamSSIF::FillMVCQueue(double dtsBase)
   if (!m_bluRay)
     return false;
 
-  CDVDDemux* demux = m_bluRay->GetDemuxMVC();
+  CDVDDemux* demux = m_bluRay->GetExtentionDemux();
   DemuxPacket* mvc;
   while ((m_MVCqueue.size() < MVC_QUEUE_SIZE) && (mvc = demux->Read()))
   {

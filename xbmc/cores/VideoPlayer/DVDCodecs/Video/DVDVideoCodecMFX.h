@@ -178,6 +178,7 @@ public:
 
   bool ClearPicture(DVDVideoPicture* pDvdVideoPicture) override;
   void SetCodecControl(int flags) override { m_codecControlFlags = flags; }
+  bool SupportsExtention() override { return true; }
 
 private:
   bool Init();

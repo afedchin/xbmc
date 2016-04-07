@@ -159,6 +159,7 @@ public:
   virtual int  GetDecoderBufferSize() { return 0; }
   virtual int  GetDecoderFreeSpace() = 0;
   virtual bool IsEOS() { return false; };
+  virtual bool SupportsExtention() const = 0;
 };
 
 class CDVDAudioCodec;

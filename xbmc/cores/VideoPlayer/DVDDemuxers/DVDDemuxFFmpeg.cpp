@@ -494,14 +494,14 @@ bool CDVDDemuxFFmpeg::Open(CDVDInputStream* pInput, bool streaminfo, bool filein
 
   UpdateCurrentPTS();
 
-  if (!fileinfo && m_pInput->IsStreamType(DVDSTREAM_TYPE_BLURAY))
+  if (!fileinfo)
   {
-    CDVDInputStreamBluray *bluRay = static_cast<CDVDInputStreamBluray*>(m_pInput);
-    if (bluRay->HasMVC())
+    CDVDInputStream::IExtentionStream* pExt = dynamic_cast<CDVDInputStream::IExtentionStream*>(m_pInput);
+    if (pExt && pExt->HasExtention())
     {
       SAFE_DELETE(m_pSSIF);
       m_pSSIF = new CDVDDemuxStreamSSIF();
-      m_pSSIF->SetBluRay(bluRay);
+      m_pSSIF->SetBluRay(pExt);
     }
   }
   // in case of mpegts and we have not seen pat/pmt, defer creation of streams
@@ -1324,13 +1324,13 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
               pStream->codec->codec_tag = MKTAG('A', 'M', 'V', 'C');
 
               AVStream* mvcStream = nullptr;
-              if (m_pInput->IsStreamType(DVDSTREAM_TYPE_BLURAY))
+              CDVDInputStream::IExtentionStream* pExt = dynamic_cast<CDVDInputStream::IExtentionStream*>(m_pInput);
+              if (pExt)
               {
-                CDVDInputStreamBluray *bluRay = static_cast<CDVDInputStreamBluray*>(m_pInput);
-                if (bluRay->HasMVC())
+                if (pExt->HasExtention())
                 {
-                  st->stereo_mode = bluRay->AreEyesFlipped() ? "mvc_rl" : "mvc_lr";
-                  mvcStream = static_cast<CDVDDemuxMVC*>(bluRay->GetDemuxMVC())->GetAVStream();
+                  st->stereo_mode = pExt->AreEyesFlipped() ? "mvc_rl" : "mvc_lr";
+                  mvcStream = static_cast<CDVDDemuxMVC*>(pExt->GetExtentionDemux())->GetAVStream();
                 }
               }
               else
@@ -1605,8 +1605,9 @@ bool CDVDDemuxFFmpeg::SeekChapter(int chapter, double* startpts)
     }
 
     Flush();
-    if (m_pInput->IsStreamType(DVDSTREAM_TYPE_BLURAY) 
-      && static_cast<CDVDInputStreamBluray*>(m_pInput)->HasMVC())
+
+    CDVDInputStream::IExtentionStream* pExt = dynamic_cast<CDVDInputStream::IExtentionStream*>(m_pInput);
+    if (pExt && pExt->HasExtention())
     {
       // also empty the internal ffmpeg buffer otherwise it may cause MVC buffers hang
       m_ioContext->buf_ptr = m_ioContext->buf_end;
