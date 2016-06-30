@@ -64,11 +64,11 @@ bool CTextureCache::IsCachedImage(const std::string &url) const
 {
   if (url != "-" && !CURL::IsFullPath(url))
     return true;
-  if (URIUtils::IsInPath(url, "special://skin/") ||
-      URIUtils::IsInPath(url, "special://temp/") ||
-      URIUtils::IsInPath(url, "resource://") ||
-      URIUtils::IsInPath(url, "androidapp://")   ||
-      URIUtils::IsInPath(url, CProfilesManager::GetInstance().GetThumbnailsFolder()))
+  if (URIUtils::PathHasParent(url, "special://skin", true) ||
+      URIUtils::PathHasParent(url, "special://temp", true) ||
+      URIUtils::PathHasParent(url, "resource://", true) ||
+      URIUtils::PathHasParent(url, "androidapp://", true)   ||
+      URIUtils::PathHasParent(url, CProfilesManager::GetInstance().GetThumbnailsFolder(), true))
     return true;
   return false;
 }
@@ -102,23 +102,13 @@ bool CTextureCache::CanCacheImageURL(const CURL &url)
   return (url.GetUserName().empty() || url.GetUserName() == "music");
 }
 
-std::string CTextureCache::CheckCachedImage(const std::string &url, bool returnDDS, bool &needsRecaching)
+std::string CTextureCache::CheckCachedImage(const std::string &url, bool &needsRecaching)
 {
   CTextureDetails details;
   std::string path(GetCachedImage(url, details, true));
   needsRecaching = !details.hash.empty();
   if (!path.empty())
-  {
-    if (!needsRecaching && returnDDS && !URIUtils::IsInPath(url, "special://skin/")) // TODO: should skin images be .dds'd (currently they're not necessarily writeable)
-    { // check for dds version
-      std::string ddsPath = URIUtils::ReplaceExtension(path, ".dds");
-      if (CFile::Exists(ddsPath))
-        return ddsPath;
-      if (g_advancedSettings.m_useDDSFanart)
-        AddJob(new CTextureDDSJob(path));
-    }
     return path;
-  }
   return "";
 }
 
@@ -178,7 +168,7 @@ bool CTextureCache::CacheImage(const std::string &image, CTextureDetails &detail
 
 void CTextureCache::ClearCachedImage(const std::string &url, bool deleteSource /*= false */)
 {
-  // TODO: This can be removed when the texture cache covers everything.
+  //! @todo This can be removed when the texture cache covers everything.
   std::string path = deleteSource ? url : "";
   std::string cachedFile;
   if (ClearCachedTexture(url, cachedFile))
@@ -281,10 +271,6 @@ void CTextureCache::OnCachingComplete(bool success, CTextureCacheJob *job)
   }
 
   m_completeEvent.Set();
-
-  // TODO: call back to the UI indicating that it can update it's image...
-  if (success && g_advancedSettings.m_useDDSFanart && !job->m_details.file.empty())
-    AddJob(new CTextureDDSJob(GetCachedPath(job->m_details.file)));
 }
 
 void CTextureCache::OnJobComplete(unsigned int jobID, bool success, CJob *job)

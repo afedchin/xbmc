@@ -32,6 +32,7 @@
 #include "StringUtils.h"
 #include "URIUtils.h"
 #include "guilib/LocalizeStrings.h"
+#include "Variant.h"
 
 #include <cassert>
 
@@ -107,7 +108,7 @@ using namespace MUSIC_INFO;
  *  *t - Date Taken (suitable for Pictures)
  */
 
-#define MASK_CHARS "NSATBGYFLDIJRCKMEPHZOQUVXWacdprt"
+#define MASK_CHARS "NSATBGYFLDIJRCKMEPHZOQUVXWacdiprstuv"
 
 CLabelFormatter::CLabelFormatter(const std::string &mask, const std::string &mask2)
 {
@@ -208,10 +209,8 @@ std::string CLabelFormatter::GetMaskContent(const CMaskString &mask, const CFile
     {
       if (movie->m_firstAired.IsValid())
         value = movie->m_firstAired.GetAsLocalizedDate();
-      else if (movie->m_premiered.IsValid())
-        value = movie->m_premiered.GetAsLocalizedDate();
-      else if (movie->m_iYear > 0)
-        value = StringUtils::Format("%i", movie->m_iYear);
+      else if (movie->HasYear())
+        value = StringUtils::Format("%i", movie->GetYear());
     }
     break;
   case 'F': // filename
@@ -346,6 +345,22 @@ std::string CLabelFormatter::GetMaskContent(const CMaskString &mask, const CFile
   case 't': // Date Taken
     if (pic && pic->GetDateTimeTaken().IsValid())
       value = pic->GetDateTimeTaken().GetAsLocalizedDate();
+    break;
+  case 's': // Addon status
+    if (item->HasProperty("Addon.Status"))
+      value = item->GetProperty("Addon.Status").asString();
+    break;
+  case 'i': // Install date
+    if (item->HasAddonInfo() && item->GetAddonInfo()->InstallDate().IsValid())
+      value = item->GetAddonInfo()->InstallDate().GetAsLocalizedDate();
+    break;
+  case 'u': // Last used
+    if (item->HasAddonInfo() && item->GetAddonInfo()->LastUsed().IsValid())
+      value = item->GetAddonInfo()->LastUsed().GetAsLocalizedDate();
+    break;
+  case 'v': // Last updated
+    if (item->HasAddonInfo() && item->GetAddonInfo()->LastUpdated().IsValid())
+      value = item->GetAddonInfo()->LastUpdated().GetAsLocalizedDate();
     break;
   }
   if (!value.empty())

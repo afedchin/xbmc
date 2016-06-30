@@ -1,5 +1,8 @@
+[![Build Status](https://travis-ci.org/xbmc/xbmc.svg?branch=master)](https://travis-ci.org/xbmc/xbmc)
+[![Documentation](https://codedocs.xyz/xbmc/xbmc.svg)](https://codedocs.xyz/xbmc/xbmc/)
+
 ![Kodi logo](https://raw.githubusercontent.com/xbmc/xbmc-forum/master/xbmc/images/logo-sbs-black.png)
-# Kodi Home Theatre Software
+# Kodi Home Theater Software
 
 **Welcome to Kodi!**
 
@@ -22,7 +25,7 @@ around. It was designed for network playback, so you can stream your multimedia
 from anywhere in the house or directly from the internet using practically any
 protocol available.
 
-Use your media as-is: Kodi can play CD's and DVD's directly
+Use your media as-is: Kodi can play CDs and DVDs directly
 from the disk or image file, almost all popular archive formats from your hard
 drive, and even files inside ZIP and RAR archives. It will even scan all of
 your media and automatically create a personalized library complete with box

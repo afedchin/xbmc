@@ -22,6 +22,7 @@
 
 #include "system.h" // until we get sane int types used here
 #include <memory>
+#include <vector>
 #include "IPlayerCallback.h"
 #include "guilib/Geometry.h"
 #include "guilib/Resolution.h"
@@ -258,9 +259,6 @@ public:
   virtual void SetVolume(float volume){}
   virtual bool ControlsVolume(){ return false;}
   virtual void SetDynamicRangeCompression(long drc){}
-  virtual void GetAudioInfo(std::string& strAudioInfo) = 0;
-  virtual void GetVideoInfo(std::string& strVideoInfo) = 0;
-  virtual void GetGeneralInfo(std::string& strGeneralInfo) = 0;
   virtual bool CanRecord() { return false;};
   virtual bool IsRecording() { return false;};
   virtual bool Record(bool bOnOff) { return false;};
@@ -305,7 +303,6 @@ public:
   virtual int  SeekChapter(int iChapter)                       { return -1; }
 //  virtual bool GetChapterInfo(int chapter, SChapterInfo &info) { return false; }
 
-  virtual float GetActualFPS() { return 0.0f; };
   virtual void SeekTime(int64_t iTime = 0){};
   /*
    \brief seek relative to current time, returns false if not implemented by player
@@ -393,21 +390,15 @@ public:
    */
   virtual void FrameMove() {};
 
-  virtual void FrameWait(int ms) {};
-
   virtual bool HasFrame() { return false; };
 
   virtual void Render(bool clear, uint32_t alpha = 255, bool gui = true) {};
-
-  virtual void AfterRender() {};
 
   virtual void FlushRenderer() {};
 
   virtual void SetRenderViewMode(int mode) {};
 
   virtual float GetRenderAspectRatio() { return 1.0; };
-
-  virtual RESOLUTION GetRenderResolution() { return RES_INVALID; };
 
   virtual void TriggerUpdateResolution() {};
 
@@ -426,8 +417,6 @@ public:
   virtual void RenderCaptureRelease(unsigned int captureId) {};
   virtual void RenderCapture(unsigned int captureId, unsigned int width, unsigned int height, int flags) {};
   virtual bool RenderCaptureGetPixels(unsigned int captureId, unsigned int millis, uint8_t *buffer, unsigned int size) { return false; };
-
-  virtual std::string GetRenderVSyncState() { return ""; };
 
   std::string m_name;
   std::string m_type;

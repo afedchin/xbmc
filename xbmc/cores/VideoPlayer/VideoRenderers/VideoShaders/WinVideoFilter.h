@@ -21,6 +21,8 @@
  */
 
 #ifdef HAS_DX
+#include <string>
+#include <vector>
 
 #include "../../guilib/Geometry.h"
 #include "../WinRenderer.h"
@@ -111,8 +113,7 @@ private:
   struct CUSTOMVERTEX {
       FLOAT x, y, z;
       FLOAT tu, tv;   // Y Texture coordinates
-      FLOAT tu2, tv2; // U Texture coordinates
-      FLOAT tu3, tv3; // V Texture coordinates
+      FLOAT tu2, tv2; // U and V Textures coordinates
   };
 };
 

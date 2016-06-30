@@ -328,7 +328,7 @@ bool CWIN32Util::XBMCShellExecute(const std::string &strPath, bool bWaitForScrip
 
   if(bWaitForScriptExit)
   {
-    // Todo: Pause music and video playback
+    //! @todo Pause music and video playback
     WaitForSingleObject(ShExecInfo.hProcess,INFINITE);
   }
 
@@ -614,7 +614,6 @@ HRESULT CWIN32Util::ToggleTray(const char cDriveLetter)
     DWORD dwDummy;
     dwReq = (GetDriveStatus(strVolFormat, true) == 1) ? IOCTL_STORAGE_LOAD_MEDIA : IOCTL_STORAGE_EJECT_MEDIA;
     bRet = DeviceIoControl( hDrive, dwReq, NULL, 0, NULL, 0, &dwDummy, NULL);
-    CloseHandle( hDrive );
   }
   // Windows doesn't seem to send always DBT_DEVICEREMOVECOMPLETE
   // unmount it here too as it won't hurt
@@ -626,6 +625,7 @@ HRESULT CWIN32Util::ToggleTray(const char cDriveLetter)
     share.strName = share.strPath;
     g_mediaManager.RemoveAutoSource(share);
   }
+  CloseHandle(hDrive);
   return bRet? S_OK : S_FALSE;
 }
 
@@ -923,7 +923,8 @@ void CWIN32Util::GetDrivesByType(VECSOURCES &localDrives, Drive_Types eDriveType
         }
         else
         {
-          // Lets show it, like Windows explorer do... TODO: sorting should depend on driver letter
+          // Lets show it, like Windows explorer do...
+          //! @todo Sorting should depend on driver letter
           switch(uDriveType)
           {
           case DRIVE_CDROM:

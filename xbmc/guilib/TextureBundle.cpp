@@ -18,16 +18,10 @@
  *
  */
 
-#include "system.h"
 #include "TextureBundle.h"
 
-CTextureBundle::CTextureBundle(void)
-{
-  m_useXPR = false;
-  m_useXBT = false;
-}
-
-CTextureBundle::~CTextureBundle(void)
+CTextureBundle::CTextureBundle()
+  : m_useXBT{false}
 {
 }
 
@@ -37,24 +31,14 @@ bool CTextureBundle::HasFile(const std::string& Filename)
   {
     return m_tbXBT.HasFile(Filename);
   }
-  else if (m_useXPR)
-  {
-    return m_tbXPR.HasFile(Filename);
-  }
-  else if (m_tbXBT.HasFile(Filename))
+
+  if (m_tbXBT.HasFile(Filename))
   {
     m_useXBT = true;
     return true;
   }
-  else if (m_tbXPR.HasFile(Filename))
-  {
-    m_useXPR = true;
-    return true;
-  }
-  else
-  {
-    return false;
-  }
+
+  return false;
 }
 
 void CTextureBundle::GetTexturesFromPath(const std::string &path, std::vector<std::string> &textures)
@@ -62,10 +46,6 @@ void CTextureBundle::GetTexturesFromPath(const std::string &path, std::vector<st
   if (m_useXBT)
   {
     m_tbXBT.GetTexturesFromPath(path, textures);
-  }
-  else if (m_useXPR)
-  {
-    m_tbXPR.GetTexturesFromPath(path, textures);
   }
 }
 
@@ -76,14 +56,8 @@ bool CTextureBundle::LoadTexture(const std::string& Filename, CBaseTexture** ppT
   {
     return m_tbXBT.LoadTexture(Filename, ppTexture, width, height);
   }
-  else if (m_useXPR)
-  {
-    return m_tbXPR.LoadTexture(Filename, ppTexture, width, height);
-  }
-  else
-  {
-    return false;
-  }
+
+  return false;
 }
 
 int CTextureBundle::LoadAnim(const std::string& Filename, CBaseTexture*** ppTextures,
@@ -93,26 +67,12 @@ int CTextureBundle::LoadAnim(const std::string& Filename, CBaseTexture*** ppText
   {
     return m_tbXBT.LoadAnim(Filename, ppTextures, width, height, nLoops, ppDelays);
   }
-  else if (m_useXPR)
-  {
-    return m_tbXPR.LoadAnim(Filename, ppTextures, width, height, nLoops, ppDelays);
-  }
-  else
-  {
-    return 0;
-  }
-}
 
-void CTextureBundle::Cleanup()
-{
-  m_tbXBT.Cleanup();
-  m_tbXPR.Cleanup();
-  m_useXPR = m_useXBT = false;
+  return 0;
 }
 
 void CTextureBundle::SetThemeBundle(bool themeBundle)
 {
-  m_tbXPR.SetThemeBundle(themeBundle);
   m_tbXBT.SetThemeBundle(themeBundle);
 }
 

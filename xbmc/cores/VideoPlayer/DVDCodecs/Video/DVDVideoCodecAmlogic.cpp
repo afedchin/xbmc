@@ -39,8 +39,7 @@ typedef struct frame_queue {
   struct frame_queue *nextframe;
 } frame_queue;
 
-CDVDVideoCodecAmlogic::CDVDVideoCodecAmlogic(IVPClockCallback* clock) :
-  m_clock(clock),
+CDVDVideoCodecAmlogic::CDVDVideoCodecAmlogic(CProcessInfo &processInfo) : CDVDVideoCodec(processInfo),
   m_Codec(NULL),
   m_pFormatName("amcodec"),
   m_last_pts(0.0),
@@ -50,7 +49,8 @@ CDVDVideoCodecAmlogic::CDVDVideoCodecAmlogic(IVPClockCallback* clock) :
   m_video_rate(0),
   m_mpeg2_sequence(NULL),
   m_bitparser(NULL),
-  m_bitstream(NULL)
+  m_bitstream(NULL),
+  m_opened(false)
 {
   pthread_mutex_init(&m_queue_mutex, NULL);
 }
@@ -84,20 +84,22 @@ bool CDVDVideoCodecAmlogic::Open(CDVDStreamInfo &hints, CDVDCodecOptions &option
     case AV_CODEC_ID_MPEG1VIDEO:
     case AV_CODEC_ID_MPEG2VIDEO:
     case AV_CODEC_ID_MPEG2VIDEO_XVMC:
+      if (m_hints.width <= CSettings::GetInstance().GetInt(CSettings::SETTING_VIDEOPLAYER_USEAMCODECMPEG2))
+        return false;
       m_mpeg2_sequence_pts = 0;
       m_mpeg2_sequence = new mpeg2_sequence;
       m_mpeg2_sequence->width  = m_hints.width;
       m_mpeg2_sequence->height = m_hints.height;
       m_mpeg2_sequence->ratio  = m_hints.aspect;
-      if (m_hints.rfpsrate > 0 && m_hints.rfpsscale != 0)
-        m_mpeg2_sequence->rate = (float)m_hints.rfpsrate / m_hints.rfpsscale;
-      else if (m_hints.fpsrate > 0 && m_hints.fpsscale != 0)
+      if (m_hints.fpsrate > 0 && m_hints.fpsscale != 0)
         m_mpeg2_sequence->rate = (float)m_hints.fpsrate / m_hints.fpsscale;
       else
         m_mpeg2_sequence->rate = 1.0;
       m_pFormatName = "am-mpeg2";
       break;
     case AV_CODEC_ID_H264:
+      if (m_hints.width <= CSettings::GetInstance().GetInt(CSettings::SETTING_VIDEOPLAYER_USEAMCODECH264))
+        return false;
       if ((!aml_support_h264_4k2k()) && ((m_hints.width > 1920) || (m_hints.height > 1088)))
       {
         // 4K is supported only on Amlogic S802/S812 chip
@@ -122,7 +124,7 @@ bool CDVDVideoCodecAmlogic::Open(CDVDStreamInfo &hints, CDVDCodecOptions &option
     case AV_CODEC_ID_MPEG4:
     case AV_CODEC_ID_MSMPEG4V2:
     case AV_CODEC_ID_MSMPEG4V3:
-      if (hints.width <= 800)
+      if (m_hints.width <= CSettings::GetInstance().GetInt(CSettings::SETTING_VIDEOPLAYER_USEAMCODECMPEG4))
         return false;
       m_pFormatName = "am-mpeg4";
       break;
@@ -180,7 +182,7 @@ bool CDVDVideoCodecAmlogic::Open(CDVDStreamInfo &hints, CDVDCodecOptions &option
   }
 
   m_aspect_ratio = m_hints.aspect;
-  m_Codec = new CAMLCodec(m_clock);
+  m_Codec = new CAMLCodec();
   if (!m_Codec)
   {
     CLog::Log(LOGERROR, "%s: Failed to create Amlogic Codec", __MODULE_NAME__);
@@ -206,11 +208,11 @@ bool CDVDVideoCodecAmlogic::Open(CDVDStreamInfo &hints, CDVDCodecOptions &option
   m_videobuffer.iDisplayHeight = m_videobuffer.iHeight;
   if (m_hints.aspect > 0.0 && !m_hints.forced_aspect)
   {
-    m_videobuffer.iDisplayWidth  = ((int)lrint(m_videobuffer.iHeight * m_hints.aspect)) & -3;
+    m_videobuffer.iDisplayWidth  = ((int)lrint(m_videobuffer.iHeight * m_hints.aspect)) & ~3;
     if (m_videobuffer.iDisplayWidth > m_videobuffer.iWidth)
     {
       m_videobuffer.iDisplayWidth  = m_videobuffer.iWidth;
-      m_videobuffer.iDisplayHeight = ((int)lrint(m_videobuffer.iWidth / m_hints.aspect)) & -3;
+      m_videobuffer.iDisplayHeight = ((int)lrint(m_videobuffer.iWidth / m_hints.aspect)) & ~3;
     }
   }
 
@@ -292,7 +294,7 @@ bool CDVDVideoCodecAmlogic::GetPicture(DVDVideoPicture* pDvdVideoPicture)
     m_Codec->GetPicture(&m_videobuffer);
   *pDvdVideoPicture = m_videobuffer;
 
-  CDVDAmlogicInfo* info = new CDVDAmlogicInfo(this, m_Codec);
+  CDVDAmlogicInfo* info = new CDVDAmlogicInfo(this, m_Codec, (int)m_Codec->GetCurPts());
 
   {
     CSingleLock lock(m_secure);
@@ -309,11 +311,11 @@ bool CDVDVideoCodecAmlogic::GetPicture(DVDVideoPicture* pDvdVideoPicture)
   pDvdVideoPicture->iDisplayHeight = pDvdVideoPicture->iHeight;
   if (m_aspect_ratio > 1.0 && !m_hints.forced_aspect)
   {
-    pDvdVideoPicture->iDisplayWidth  = ((int)lrint(pDvdVideoPicture->iHeight * m_aspect_ratio)) & -3;
+    pDvdVideoPicture->iDisplayWidth  = ((int)lrint(pDvdVideoPicture->iHeight * m_aspect_ratio)) & ~3;
     if (pDvdVideoPicture->iDisplayWidth > pDvdVideoPicture->iWidth)
     {
       pDvdVideoPicture->iDisplayWidth  = pDvdVideoPicture->iWidth;
-      pDvdVideoPicture->iDisplayHeight = ((int)lrint(pDvdVideoPicture->iWidth / m_aspect_ratio)) & -3;
+      pDvdVideoPicture->iDisplayHeight = ((int)lrint(pDvdVideoPicture->iWidth / m_aspect_ratio)) & ~3;
     }
   }
 
@@ -438,43 +440,41 @@ void CDVDVideoCodecAmlogic::FrameRateTracking(uint8_t *pData, int iSize, double 
       {
         default:
         case 0x01:
-          m_hints.rfpsrate = 24000.0;
-          m_hints.rfpsscale = 1001.0;
+          m_hints.fpsrate = 24000.0;
+          m_hints.fpsscale = 1001.0;
           break;
         case 0x02:
-          m_hints.rfpsrate = 24000.0;
-          m_hints.rfpsscale = 1000.0;
+          m_hints.fpsrate = 24000.0;
+          m_hints.fpsscale = 1000.0;
           break;
         case 0x03:
-          m_hints.rfpsrate = 25000.0;
-          m_hints.rfpsscale = 1000.0;
+          m_hints.fpsrate = 25000.0;
+          m_hints.fpsscale = 1000.0;
           break;
         case 0x04:
-          m_hints.rfpsrate = 30000.0;
-          m_hints.rfpsscale = 1001.0;
+          m_hints.fpsrate = 30000.0;
+          m_hints.fpsscale = 1001.0;
           break;
         case 0x05:
-          m_hints.rfpsrate = 30000.0;
-          m_hints.rfpsscale = 1000.0;
+          m_hints.fpsrate = 30000.0;
+          m_hints.fpsscale = 1000.0;
           break;
         case 0x06:
-          m_hints.rfpsrate = 50000.0;
-          m_hints.rfpsscale = 1000.0;
+          m_hints.fpsrate = 50000.0;
+          m_hints.fpsscale = 1000.0;
           break;
         case 0x07:
-          m_hints.rfpsrate = 60000.0;
-          m_hints.rfpsscale = 1001.0;
+          m_hints.fpsrate = 60000.0;
+          m_hints.fpsscale = 1001.0;
           break;
         case 0x08:
-          m_hints.rfpsrate = 60000.0;
-          m_hints.rfpsscale = 1000.0;
+          m_hints.fpsrate = 60000.0;
+          m_hints.fpsscale = 1000.0;
           break;
       }
       m_hints.width    = m_mpeg2_sequence->width;
       m_hints.height   = m_mpeg2_sequence->height;
       m_hints.aspect   = m_mpeg2_sequence->ratio;
-      m_hints.fpsrate  = m_hints.rfpsrate;
-      m_hints.fpsscale = m_hints.rfpsscale;
     }
     return;
   }
@@ -573,10 +573,11 @@ void CDVDVideoCodecAmlogic::RemoveInfo(CDVDAmlogicInfo *info)
   m_inflight.erase(m_inflight.find(info));
 }
 
-CDVDAmlogicInfo::CDVDAmlogicInfo(CDVDVideoCodecAmlogic *codec, CAMLCodec *amlcodec)
+CDVDAmlogicInfo::CDVDAmlogicInfo(CDVDVideoCodecAmlogic *codec, CAMLCodec *amlcodec, int omxPts)
   : m_refs(0)
   , m_codec(codec)
   , m_amlCodec(amlcodec)
+  , m_omxPts(omxPts)
 {
 }
 

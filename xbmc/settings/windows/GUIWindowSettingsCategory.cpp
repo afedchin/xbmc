@@ -27,18 +27,16 @@
 #include "settings/DisplaySettings.h"
 #include "settings/Settings.h"
 #include "settings/lib/SettingSection.h"
+#include "settings/windows/GUIControlSettings.h"
 #include "utils/log.h"
 #include "view/ViewStateSettings.h"
 
-#define SETTINGS_PICTURES               WINDOW_SETTINGS_MYPICTURES - WINDOW_SETTINGS_START
-#define SETTINGS_PROGRAMS               WINDOW_SETTINGS_MYPROGRAMS - WINDOW_SETTINGS_START
-#define SETTINGS_WEATHER                WINDOW_SETTINGS_MYWEATHER - WINDOW_SETTINGS_START
-#define SETTINGS_MUSIC                  WINDOW_SETTINGS_MYMUSIC - WINDOW_SETTINGS_START
 #define SETTINGS_SYSTEM                 WINDOW_SETTINGS_SYSTEM - WINDOW_SETTINGS_START
-#define SETTINGS_VIDEOS                 WINDOW_SETTINGS_MYVIDEOS - WINDOW_SETTINGS_START
 #define SETTINGS_SERVICE                WINDOW_SETTINGS_SERVICE - WINDOW_SETTINGS_START
-#define SETTINGS_APPEARANCE             WINDOW_SETTINGS_APPEARANCE - WINDOW_SETTINGS_START
 #define SETTINGS_PVR                    WINDOW_SETTINGS_MYPVR - WINDOW_SETTINGS_START
+#define SETTINGS_PLAYER                 WINDOW_SETTINGS_PLAYER - WINDOW_SETTINGS_START
+#define SETTINGS_LIBRARY                WINDOW_SETTINGS_LIBRARY - WINDOW_SETTINGS_START
+#define SETTINGS_INTERFACE              WINDOW_SETTINGS_INTERFACE - WINDOW_SETTINGS_START
 
 #define CONTRL_BTN_LEVELS               20
 
@@ -47,20 +45,17 @@ typedef struct {
   std::string name;
 } SettingGroup;
 
-static const SettingGroup s_settingGroupMap[] = { { SETTINGS_PICTURES,    "pictures" },
-                                                  { SETTINGS_PROGRAMS,    "programs" },
-                                                  { SETTINGS_WEATHER,     "weather" },
-                                                  { SETTINGS_MUSIC,       "music" },
-                                                  { SETTINGS_SYSTEM,      "system" },
-                                                  { SETTINGS_VIDEOS,      "videos" },
+static const SettingGroup s_settingGroupMap[] = { { SETTINGS_SYSTEM,      "system" },
                                                   { SETTINGS_SERVICE,     "services" },
-                                                  { SETTINGS_APPEARANCE,  "appearance" },
-                                                  { SETTINGS_PVR,         "pvr" } };
+                                                  { SETTINGS_PVR,         "pvr" },
+                                                  { SETTINGS_PLAYER,      "player" },
+                                                  { SETTINGS_LIBRARY,     "library" },
+                                                  { SETTINGS_INTERFACE,   "interface" } };
                                                   
 #define SettingGroupSize sizeof(s_settingGroupMap) / sizeof(SettingGroup)
 
 CGUIWindowSettingsCategory::CGUIWindowSettingsCategory()
-    : CGUIDialogSettingsManagerBase(WINDOW_SETTINGS_MYPICTURES, "SettingsCategory.xml"),
+    : CGUIDialogSettingsManagerBase(WINDOW_SETTINGS_SYSTEM, "SettingsCategory.xml"),
       m_settings(CSettings::GetInstance()),
       m_iSection(0),
       m_returningFromSkinLoad(false)
@@ -69,15 +64,12 @@ CGUIWindowSettingsCategory::CGUIWindowSettingsCategory()
 
   // set the correct ID range...
   m_idRange.clear();
-  m_idRange.push_back(WINDOW_SETTINGS_MYPICTURES);
-  m_idRange.push_back(WINDOW_SETTINGS_MYPROGRAMS);
-  m_idRange.push_back(WINDOW_SETTINGS_MYWEATHER);
-  m_idRange.push_back(WINDOW_SETTINGS_MYMUSIC);
   m_idRange.push_back(WINDOW_SETTINGS_SYSTEM);
-  m_idRange.push_back(WINDOW_SETTINGS_MYVIDEOS);
   m_idRange.push_back(WINDOW_SETTINGS_SERVICE);
-  m_idRange.push_back(WINDOW_SETTINGS_APPEARANCE);
   m_idRange.push_back(WINDOW_SETTINGS_MYPVR);
+  m_idRange.push_back(WINDOW_SETTINGS_PLAYER);
+  m_idRange.push_back(WINDOW_SETTINGS_LIBRARY);
+  m_idRange.push_back(WINDOW_SETTINGS_INTERFACE);
 }
 
 CGUIWindowSettingsCategory::~CGUIWindowSettingsCategory()
@@ -94,7 +86,7 @@ bool CGUIWindowSettingsCategory::OnMessage(CGUIMessage &message)
       m_returningFromSkinLoad = false;
 
       if (!message.GetStringParam(0).empty())
-        FocusCategory(message.GetStringParam(0));
+        FocusElement(message.GetStringParam(0));
 
       return true;
     }
@@ -210,15 +202,32 @@ void CGUIWindowSettingsCategory::Save()
   m_settings.Save();
 }
 
-void CGUIWindowSettingsCategory::FocusCategory(const std::string& categoryId)
+void CGUIWindowSettingsCategory::FocusElement(const std::string& elementId)
 {
-  auto category = std::find_if(m_categories.cbegin(), m_categories.cend(),
-    [&categoryId](const CSettingCategory* category) { return category->GetId() == categoryId; });
-  if (category == m_categories.end())
+  for (size_t i = 0; i < m_categories.size(); ++i)
   {
-    CLog::Log(LOGERROR, "CGUIWindowSettingsCategory: asked to focus unknown category '%s'.", categoryId.c_str());
-    return;
-  }
+    if (m_categories[i]->GetId() == elementId)
+    {
+      SET_CONTROL_FOCUS(CONTROL_SETTINGS_START_BUTTONS + i, 0);
+      return;
+    }
+    for (const auto& group: m_categories[i]->GetGroups())
+    {
+      for (const auto& setting : group->GetSettings())
+      {
+        if (setting->GetId() == elementId)
+        {
+          SET_CONTROL_FOCUS(CONTROL_SETTINGS_START_BUTTONS + i, 0);
 
-  SET_CONTROL_FOCUS(CONTROL_SETTINGS_START_BUTTONS + std::distance(m_categories.cbegin(), category), 0);
+          auto control = GetSettingControl(elementId);
+          if (control)
+            SET_CONTROL_FOCUS(control->GetID(), 0);
+          else
+            CLog::Log(LOGERROR, "CGUIWindowSettingsCategory: failed to get control for setting '%s'.", elementId.c_str());
+          return;
+        }
+      }
+    }
+  }
+  CLog::Log(LOGERROR, "CGUIWindowSettingsCategory: failed to set focus. unknown category/setting id '%s'.", elementId.c_str());
 }

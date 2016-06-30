@@ -21,6 +21,8 @@
 #pragma once
 
 #include <string>
+#include <vector>
+
 #include "IListProvider.h"
 #include "guilib/GUIStaticItem.h"
 #include "utils/Job.h"
@@ -30,13 +32,13 @@
 class TiXmlElement;
 class CVariant;
 
-typedef enum
+enum class InfoTagType
 {
   VIDEO,
   AUDIO,
   PICTURE,
   PROGRAM
-} InfoTagType;
+};
 
 class CDirectoryProvider :
   public IListProvider,
@@ -54,15 +56,17 @@ public:
   CDirectoryProvider(const TiXmlElement *element, int parentID);
   virtual ~CDirectoryProvider();
 
-  virtual bool Update(bool forceRefresh);
-  virtual void Announce(ANNOUNCEMENT::AnnouncementFlag flag, const char *sender, const char *message, const CVariant &data);
-  virtual void Fetch(std::vector<CGUIListItemPtr> &items) const;
-  virtual void Reset(bool immediately = false);
-  virtual bool OnClick(const CGUIListItemPtr &item);
-  virtual bool IsUpdating() const;
+  virtual bool Update(bool forceRefresh) override;
+  virtual void Announce(ANNOUNCEMENT::AnnouncementFlag flag, const char *sender, const char *message, const CVariant &data) override;
+  virtual void Fetch(std::vector<CGUIListItemPtr> &items) const override;
+  virtual void Reset(bool immediately = false) override;
+  virtual bool OnClick(const CGUIListItemPtr &item) override;
+  bool OnInfo(const CGUIListItemPtr &item) override;
+  bool OnContextMenu(const CGUIListItemPtr &item) override;
+  virtual bool IsUpdating() const override;
 
   // callback from directory job
-  virtual void OnJobComplete(unsigned int jobID, bool success, CJob *job);
+  virtual void OnJobComplete(unsigned int jobID, bool success, CJob *job) override;
 private:
   UpdateState      m_updateState;
   bool             m_isAnnounced;

@@ -18,17 +18,19 @@
  *
  */
 
+#include "DVDAudio.h"
 #include "threads/SingleLock.h"
 #include "utils/log.h"
-#include "DVDAudio.h"
 #include "DVDClock.h"
 #include "DVDCodecs/Audio/DVDAudioCodec.h"
 #include "cores/AudioEngine/AEFactory.h"
-#include "cores/AudioEngine/Interfaces/AEStream.h"
 #include "cores/AudioEngine/Utils/AEAudioFormat.h"
 #include "settings/MediaSettings.h"
+#ifdef TARGET_POSIX
+#include "linux/XTimeUtils.h"
+#endif
 
-CDVDAudio::CDVDAudio(volatile bool &bStop, CDVDClock *clock) : m_bStop(bStop), m_pClock(clock)
+CDVDAudio::CDVDAudio(CDVDClock *clock) : m_pClock(clock)
 {
   m_pAudioStream = NULL;
   m_bPassthrough = false;
@@ -102,30 +104,35 @@ void CDVDAudio::Destroy()
 
 unsigned int CDVDAudio::AddPackets(const DVDAudioFrame &audioframe)
 {
+  m_bAbort = false;
+
   CSingleLock lock (m_critSection);
 
   if(!m_pAudioStream)
     return 0;
 
   CAESyncInfo info = m_pAudioStream->GetSyncInfo();
-  unsigned int newTime = info.errortime;
-  if (info.state != CAESyncInfo::SYNC_INSYNC)
+  if (info.state == CAESyncInfo::SYNC_INSYNC)
+  {
+    unsigned int newTime = info.errortime;
+    if (newTime != m_syncErrorTime)
+    {
+      m_syncErrorTime = info.errortime;
+      m_syncError = info.error / 1000 * DVD_TIME_BASE;
+      m_resampleRatio = info.rr;
+    }
+  }
+  else
   {
     m_syncErrorTime = 0;
     m_syncError = 0.0;
-  }
-  else if (newTime != m_syncErrorTime)
-  {
-    m_syncErrorTime = info.errortime;
-    m_syncError = info.error / 1000 * DVD_TIME_BASE;
-    m_resampleRatio = info.rr;
   }
 
   //Calculate a timeout when this definitely should be done
   double timeout;
   timeout  = DVD_SEC_TO_TIME(m_pAudioStream->GetDelay()) + audioframe.duration;
   timeout += DVD_SEC_TO_TIME(1.0);
-  timeout += CDVDClock::GetAbsoluteClock();
+  timeout += m_pClock->GetAbsoluteClock();
 
   unsigned int total = audioframe.nb_frames;
   unsigned int frames = audioframe.nb_frames;
@@ -139,7 +146,7 @@ unsigned int CDVDAudio::AddPackets(const DVDAudioFrame &audioframe)
     if (frames <= 0)
       break;
 
-    if (copied == 0 && timeout < CDVDClock::GetAbsoluteClock())
+    if (copied == 0 && timeout < m_pClock->GetAbsoluteClock())
     {
       CLog::Log(LOGERROR, "CDVDAudio::AddPacketsRenderer - timeout adding data to renderer");
       break;
@@ -148,10 +155,10 @@ unsigned int CDVDAudio::AddPackets(const DVDAudioFrame &audioframe)
     lock.Leave();
     Sleep(1);
     lock.Enter();
-  } while (!m_bStop);
+  } while (!m_bAbort);
 
   m_playingPts = audioframe.pts + audioframe.duration - GetDelay();
-  m_timeOfPts = CDVDClock::GetAbsoluteClock();
+  m_timeOfPts = m_pClock->GetAbsoluteClock();
 
   return total - frames;
 }
@@ -216,8 +223,9 @@ double CDVDAudio::GetDelay()
 
 void CDVDAudio::Flush()
 {
-  CSingleLock lock (m_critSection);
+  m_bAbort = true;
 
+  CSingleLock lock (m_critSection);
   if (m_pAudioStream)
   {
     m_pAudioStream->Flush();
@@ -226,6 +234,11 @@ void CDVDAudio::Flush()
   m_playingPts = DVD_NOPTS_VALUE;
   m_syncError = 0.0;
   m_syncErrorTime = 0;
+}
+
+void CDVDAudio::AbortAddPackets()
+{
+  m_bAbort = true;
 }
 
 bool CDVDAudio::IsValidFormat(const DVDAudioFrame &audioframe)
@@ -278,7 +291,7 @@ double CDVDAudio::GetPlayingPts()
   if (m_playingPts == DVD_NOPTS_VALUE)
     return 0.0;
 
-  double now = CDVDClock::GetAbsoluteClock();
+  double now = m_pClock->GetAbsoluteClock();
   double diff = now - m_timeOfPts;
   double cache = GetCacheTime();
   double played = 0.0;
@@ -319,9 +332,8 @@ void CDVDAudio::SetResampleMode(int mode)
 
 double CDVDAudio::GetClock()
 {
-  double absolute;
   if (m_pClock)
-    return m_pClock->GetClock(absolute) / DVD_TIME_BASE * 1000;
+    return (m_pClock->GetClock() + m_pClock->GetVsyncAdjust()) / DVD_TIME_BASE * 1000;
   else
     return 0.0;
 }

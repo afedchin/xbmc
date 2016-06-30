@@ -18,7 +18,7 @@
  *
  */
 
-// TODO: Need a uniform way of returning an error status
+//! @todo Need a uniform way of returning an error status
 
 #if (defined HAVE_CONFIG_H) && (!defined TARGET_WINDOWS)
   #include "config.h"
@@ -43,6 +43,7 @@
 #include "utils/Crc32.h"
 #include "FileItem.h"
 #include "LangInfo.h"
+#include "PlayListPlayer.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "guilib/TextureManager.h"
@@ -61,6 +62,10 @@
 #include "utils/log.h"
 
 using namespace KODI::MESSAGING;
+
+#ifdef TARGET_POSIX
+#include "linux/XMemUtils.h"
+#endif
 
 namespace XBMCAddon
 {
@@ -449,7 +454,7 @@ namespace XBMCAddon
       return result;
     }
 
-    // TODO: Add a mediaType enum
+    //! @todo Add a mediaType enum
     String getSupportedMedia(const char* mediaType)
     {
       XBMC_TRACE;
@@ -461,7 +466,7 @@ namespace XBMCAddon
       else if (strcmpi(mediaType, "picture") == 0)
         result = g_advancedSettings.m_pictureExtensions;
 
-      // TODO:
+      //! @todo implement
       //    else
       //      return an error
 

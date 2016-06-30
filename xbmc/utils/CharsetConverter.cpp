@@ -58,8 +58,13 @@
   #define UTF32_CHARSET "UTF-32" ENDIAN_SUFFIX
   #define UTF8_SOURCE "UTF-8"
   #define WCHAR_CHARSET UTF16_CHARSET 
+#if _DEBUG
+  #pragma comment(lib, "libfribidi.lib")
+  #pragma comment(lib, "libiconvd.lib")
+#else
   #pragma comment(lib, "libfribidi.lib")
   #pragma comment(lib, "libiconv.lib")
+#endif
 #elif defined(TARGET_ANDROID)
   #define WCHAR_IS_UCS_4 1
   #define UTF16_CHARSET "UTF-16" ENDIAN_SUFFIX
@@ -91,7 +96,6 @@ enum SpecialCharset
   UserCharset /* locale.charset */, 
   SubtitleCharset /* subtitles.charset */,
 };
-
 
 class CConverterType : public CCriticalSection
 {
@@ -172,7 +176,6 @@ CConverterType::CConverterType(const CConverterType& other) : CCriticalSection()
 {
 }
 
-
 CConverterType::~CConverterType()
 {
   CSingleLock lock(*this);
@@ -180,7 +183,6 @@ CConverterType::~CConverterType()
     iconv_close(m_iconv);
   lock.Leave(); // ensure unlocking before final destruction
 }
-
 
 iconv_t CConverterType::GetConverter(CSingleLock& converterLock)
 {
@@ -204,7 +206,6 @@ iconv_t CConverterType::GetConverter(CSingleLock& converterLock)
 
   return m_iconv;
 }
-
 
 void CConverterType::Reset(void)
 {
@@ -257,7 +258,6 @@ std::string CConverterType::ResolveSpecialCharset(enum SpecialCharset charset)
   }
 }
 
-
 enum StdConversionType /* Keep it in sync with CCharsetConverter::CInnerConverter::m_stdConversion */
 {
   NoConversion = -1,
@@ -279,7 +279,6 @@ enum StdConversionType /* Keep it in sync with CCharsetConverter::CInnerConverte
   Ucs2CharsetToUtf8,
   NumberOfStdConversionTypes /* Dummy sentinel entry */
 };
-
 
 /* We don't want to pollute header file with many additional includes and definitions, so put 
    here all staff that require usage of types defined in this file or in additional headers */
@@ -326,8 +325,6 @@ CConverterType CCharsetConverter::CInnerConverter::m_stdConversion[NumberOfStdCo
 
 CCriticalSection CCharsetConverter::CInnerConverter::m_critSectionFriBiDi;
 
-
-
 template<class INPUT,class OUTPUT>
 bool CCharsetConverter::CInnerConverter::stdConvert(StdConversionType convertType, const INPUT& strSource, OUTPUT& strDest, bool failOnInvalidChar /*= false*/)
 {
@@ -364,7 +361,6 @@ bool CCharsetConverter::CInnerConverter::customConvert(const std::string& source
 
   return result;
 }
-
 
 /* iconv may declare inbuf to be char** rather than const char** depending on platform and version,
     so provide a wrapper that handles both */
@@ -541,7 +537,6 @@ bool CCharsetConverter::CInnerConverter::logicalToVisualBiDi(const std::u32strin
   return !stringDst.empty();
 }
 
-
 static struct SCharsetMapping
 {
   const char* charset;
@@ -573,7 +568,6 @@ static struct SCharsetMapping
   , { "BIG5-HKSCS", "Hong Kong (Big5-HKSCS)" }
   , { NULL, NULL }
 };
-
 
 CCharsetConverter::CCharsetConverter()
 {

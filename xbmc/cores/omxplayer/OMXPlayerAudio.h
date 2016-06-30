@@ -54,8 +54,7 @@ protected:
   double                    m_audioClock;
 
   bool                      m_stalled;
-  bool                      m_started;
-  bool                      m_sync;
+  IDVDStreamPlayer::ESyncState m_syncState;
 
   BitstreamStats            m_audioStats;
 
@@ -71,7 +70,7 @@ protected:
   void OpenStream(CDVDStreamInfo &hints, COMXAudioCodecOMX *codec);
 private:
 public:
-  OMXPlayerAudio(OMXClock *av_clock, CDVDMessageQueue& parent);
+  OMXPlayerAudio(OMXClock *av_clock, CDVDMessageQueue& parent, CProcessInfo &processInfo);
   ~OMXPlayerAudio();
   bool OpenStream(CDVDStreamInfo &hints);
   void SendMessage(CDVDMsg* pMsg, int priority = 0) { m_messageQueue.Put(pMsg, priority); }

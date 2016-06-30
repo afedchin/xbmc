@@ -46,6 +46,7 @@
 #include "utils/log.h"
 #include "URL.h"
 #include "utils/Variant.h"
+#include "settings/AdvancedSettings.h"
 
 using namespace XFILE;
 
@@ -574,7 +575,7 @@ bool CGUIDialogFileBrowser::HaveDiscOrConnection( int iDriveType )
   }
   else if ( iDriveType == CMediaSource::SOURCE_TYPE_REMOTE )
   {
-    // TODO: Handle not connected to a remote share
+    //! @todo Handle not connected to a remote share
     if ( !g_application.getNetwork().IsConnected() )
     {
       CGUIDialogOK::ShowAndGetInput(CVariant{220}, CVariant{221});
@@ -653,12 +654,12 @@ bool CGUIDialogFileBrowser::ShowAndGetImage(const CFileItemList &items, const VE
 
 bool CGUIDialogFileBrowser::ShowAndGetImage(const VECSOURCES &shares, const std::string &heading, std::string &path)
 {
-  return ShowAndGetFile(shares, ".png|.jpg|.bmp|.gif|.tbn|.dds", heading, path, true); // true for use thumbs
+  return ShowAndGetFile(shares, g_advancedSettings.m_pictureExtensions, heading, path, true); // true for use thumbs
 }
 
 bool CGUIDialogFileBrowser::ShowAndGetImageList(const VECSOURCES &shares, const std::string &heading, std::vector<std::string> &path)
 {
-  return ShowAndGetFileList(shares, ".png|.jpg|.bmp|.gif|.tbn|.dds", heading, path, true); // true for use thumbs
+  return ShowAndGetFileList(shares, g_advancedSettings.m_pictureExtensions, heading, path, true); // true for use thumbs
 }
 
 bool CGUIDialogFileBrowser::ShowAndGetDirectory(const VECSOURCES &shares, const std::string &heading, std::string &path, bool bWriteOnly)

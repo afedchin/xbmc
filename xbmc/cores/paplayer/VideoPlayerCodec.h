@@ -38,9 +38,9 @@ public:
   VideoPlayerCodec();
   virtual ~VideoPlayerCodec();
 
-  virtual bool Init(const std::string &strFile, unsigned int filecache);
+  virtual bool Init(const CFileItem &file, unsigned int filecache) override;
   virtual void DeInit();
-  virtual int64_t Seek(int64_t iSeekTime);
+  virtual bool Seek(int64_t iSeekTime);
   virtual int ReadPCM(BYTE *pBuffer, int size, int *actualsize);
   virtual int ReadRaw(uint8_t **pBuffer, int *bufferSize);
   virtual bool CanInit();

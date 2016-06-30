@@ -41,11 +41,6 @@ CEdl::CEdl()
   Clear();
 }
 
-CEdl::~CEdl()
-{
-  Clear();
-}
-
 void CEdl::Clear()
 {
   m_vecCuts.clear();
@@ -754,8 +749,8 @@ int CEdl::RemoveCutTime(int iSeek) const
   if (!HasCut())
     return iSeek;
 
-  /*
-   * TODO: Consider an optimisation of using the (now unused) total cut time if the seek time
+  /**
+   * @todo Consider an optimisation of using the (now unused) total cut time if the seek time
    * requested is later than the end of the last recorded cut. For example, when calculating the
    * total duration for display.
    */

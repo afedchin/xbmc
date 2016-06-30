@@ -20,6 +20,8 @@
  *
  */
 
+#include <vector>
+
 #include "guilib/GraphicContext.h"
 #include "../RenderFlags.h"
 #include "../RenderFormats.h"
@@ -28,6 +30,7 @@
 #include "settings/VideoSettings.h"
 #include "cores/VideoPlayer/DVDStreamInfo.h"
 #include "guilib/Geometry.h"
+#include "threads/Thread.h"
 
 #include <interface/mmal/mmal.h>
 #include <interface/mmal/util/mmal_util.h>
@@ -38,34 +41,28 @@
 #define AUTOSOURCE -1
 
 class CBaseTexture;
-class CMMALVideoBuffer;
+class CMMALBuffer;
 
 struct DVDVideoPicture;
 
-class CYUVVideoBuffer
+class CMMALPool
 {
 public:
-  CYUVVideoBuffer();
-  ~CYUVVideoBuffer();
-  // reference counting
-  CYUVVideoBuffer *Acquire();
-  long Release();
-  MMAL_BUFFER_HEADER_T *mmal_buffer;
+  CMMALPool(MMAL_PORT_T *input, uint32_t num_buffers, uint32_t buffer_size);
+  ~CMMALPool();
+  MMAL_POOL_T *Get() { return m_pool; }
 protected:
-  long m_refs;
+  MMAL_POOL_T *m_pool;
+  MMAL_PORT_T *m_input;
 };
 
-class CMMALRenderer : public CBaseRenderer
+class CMMALRenderer : public CBaseRenderer, public CThread
 {
-  struct YUVBUFFER
-  {
-    CMMALVideoBuffer *MMALBuffer; // used for hw decoded buffers
-    CYUVVideoBuffer  *YUVBuffer;  // used for sw decoded buffers
-  };
 public:
   CMMALRenderer();
   ~CMMALRenderer();
 
+  void Process();
   virtual void Update();
 
   bool RenderCapture(CRenderCapture* capture);
@@ -99,13 +96,14 @@ public:
   virtual bool         IsGuiLayer() { return false; }
 
   void vout_input_port_cb(MMAL_PORT_T *port, MMAL_BUFFER_HEADER_T *buffer);
+  std::shared_ptr<CMMALPool> GetPool(ERenderFormat format, AVPixelFormat pixfmt, bool opaque);
 protected:
   int m_iYV12RenderBuffer;
   int m_NumYV12Buffers;
 
   std::vector<ERenderFormat> m_formats;
 
-  YUVBUFFER            m_buffers[NUM_BUFFERS];
+  CMMALBuffer         *m_buffers[NUM_BUFFERS];
   bool                 m_bConfigured;
   bool                 m_bMMALConfigured;
   unsigned int         m_extended_format;
@@ -117,13 +115,17 @@ protected:
   RENDER_STEREO_MODE        m_display_stereo_mode;
   bool                      m_StereoInvert;
   int                       m_inflight;
+  bool                      m_opaque;
+  AVPixelFormat m_pixfmt;
 
   CCriticalSection m_sharedSection;
   MMAL_COMPONENT_T *m_vout;
   MMAL_PORT_T *m_vout_input;
-  MMAL_POOL_T *m_vout_input_pool;
+  std::shared_ptr<CMMALPool> m_vout_input_pool;
+  MMAL_QUEUE_T *m_queue;
+  double m_error;
 
-  bool init_vout(ERenderFormat format);
+  bool init_vout(ERenderFormat format, AVPixelFormat pixfmt, bool opaque);
   void ReleaseBuffers();
   void UnInitMMAL();
 };

@@ -28,7 +28,7 @@
 #include "GUIPassword.h"
 #include "addons/AddonManager.h"
 #include "addons/Skin.h"
-#include "cores/AudioEngine/DSPAddons/ActiveAEDSP.h"
+#include "cores/AudioEngine/Engines/ActiveAE/AudioDSPAddons/ActiveAEDSP.h"
 #include "dialogs/GUIDialogContextMenu.h"
 #include "dialogs/GUIDialogOK.h"
 #include "guilib/GUIMessage.h"
@@ -42,6 +42,7 @@
 #endif
 #include "messaging/ApplicationMessenger.h"
 #include "network/Network.h"
+#include "PlayListPlayer.h"
 #include "profiles/Profile.h"
 #include "profiles/ProfilesManager.h"
 #include "profiles/dialogs/GUIDialogProfileSettings.h"
@@ -214,7 +215,7 @@ void CGUIWindowLoginScreen::Update()
     item->SetLabel2(strLabel);
     item->SetArt("thumb", profile->getThumb());
     if (profile->getThumb().empty() || profile->getThumb() == "-")
-      item->SetArt("thumb", "unknown-user.png");
+      item->SetArt("thumb", "DefaultUser.png");
     item->SetLabelPreformated(true);
     m_vecItems->Add(item);
   }
@@ -237,8 +238,6 @@ bool CGUIWindowLoginScreen::OnPopupMenu(int iItem)
   if (iItem == 0 && g_passwordManager.iMasterLockRetriesLeft == 0)
     choices.Add(2, 12334);
 
-  CContextMenuManager::GetInstance().AddVisibleItems(pItem, choices);
-
   int choice = CGUIDialogContextMenu::ShowAndGetChoice(choices);
   if (choice == 2)
   {
@@ -258,8 +257,6 @@ bool CGUIWindowLoginScreen::OnPopupMenu(int iItem)
   if (iItem < (int)CProfilesManager::GetInstance().GetNumberOfProfiles())
     m_vecItems->Get(iItem)->Select(bSelect);
 
-  if (choice >= CONTEXT_BUTTON_FIRST_ADDON)
-    return CContextMenuManager::GetInstance().OnClick(choice, pItem);
   return false;
 }
 
@@ -282,7 +279,7 @@ void CGUIWindowLoginScreen::LoadProfile(unsigned int profile)
   g_application.StopPVRManager();
 
   // stop audio DSP services with a blocking message
-  CApplicationMessenger::GetInstance().SendMsg(TMSG_SETAUDIODSPSTATE, ACTIVE_AE_DSP_STATE_OFF);
+  CServiceBroker::GetADSP().Deactivate();
 
   if (profile != 0 || !CProfilesManager::GetInstance().IsMasterProfile())
   {
@@ -328,9 +325,6 @@ void CGUIWindowLoginScreen::LoadProfile(unsigned int profile)
   // start services which should run on login
   ADDON::CAddonMgr::GetInstance().StartServices(false);
 
-  // start PVR related services
-  g_application.StartPVRManager();
-
   int firstWindow = g_SkinInfo->GetFirstWindow();
   // the startup window is considered part of the initialization as it most likely switches to the final window
   bool uiInitializationFinished = firstWindow != WINDOW_STARTUP_ANIM;
@@ -339,9 +333,6 @@ void CGUIWindowLoginScreen::LoadProfile(unsigned int profile)
 
   g_application.UpdateLibraries();
   CStereoscopicsManager::GetInstance().Initialize();
-
-  // start audio DSP related services with a blocking message
-  CApplicationMessenger::GetInstance().SendMsg(TMSG_SETAUDIODSPSTATE, ACTIVE_AE_DSP_STATE_ON, ACTIVE_AE_DSP_SYNC_ACTIVATE);
 
   // if the user interfaces has been fully initialized let everyone know
   if (uiInitializationFinished)

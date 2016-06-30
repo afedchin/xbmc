@@ -25,6 +25,7 @@
 #include "interfaces/python/XBPython.h"
 #include "filesystem/File.h"
 #include "network/WebServer.h"
+#include "network/httprequesthandler/HTTPRequestHandlerUtils.h"
 #include "network/httprequesthandler/HTTPWebinterfaceHandler.h"
 #include "network/httprequesthandler/python/HTTPPythonInvoker.h"
 #include "network/httprequesthandler/python/HTTPPythonWsgiInvoker.h"
@@ -76,7 +77,7 @@ CHTTPPythonHandler::CHTTPPythonHandler(const HTTPRequest &request)
 
   // we need to map any requests to a specific WSGI webinterface to the root path
   std::string baseLocation = webinterface->GetBaseLocation();
-  if (!StringUtils::StartsWith(m_request.pathUrl, baseLocation))
+  if (!URIUtils::PathHasParent(m_request.pathUrl, baseLocation))
   {
     m_response.type = HTTPRedirect;
     m_response.status = MHD_HTTP_MOVED_PERMANENTLY;
@@ -136,8 +137,8 @@ int CHTTPPythonHandler::HandleRequest()
     HTTPPythonRequest* pythonRequest = new HTTPPythonRequest();
     pythonRequest->connection = m_request.connection;
     pythonRequest->file = URIUtils::GetFileName(m_request.pathUrl);
-    CWebServer::GetRequestHeaderValues(m_request.connection, MHD_GET_ARGUMENT_KIND, pythonRequest->getValues);
-    CWebServer::GetRequestHeaderValues(m_request.connection, MHD_HEADER_KIND, pythonRequest->headerValues);
+    HTTPRequestHandlerUtils::GetRequestHeaderValues(m_request.connection, MHD_GET_ARGUMENT_KIND, pythonRequest->getValues);
+    HTTPRequestHandlerUtils::GetRequestHeaderValues(m_request.connection, MHD_HEADER_KIND, pythonRequest->headerValues);
     pythonRequest->method = m_request.method;
     pythonRequest->postValues = m_postFields;
     pythonRequest->requestContent = m_requestData;

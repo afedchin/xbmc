@@ -35,6 +35,7 @@ namespace XFILE
       NODE_TYPE_ROOT,
       NODE_TYPE_OVERVIEW,
       NODE_TYPE_TOP100,
+      NODE_TYPE_ROLE,
       NODE_TYPE_GENRE,
       NODE_TYPE_ARTIST,
       NODE_TYPE_ALBUM,
@@ -74,7 +75,9 @@ namespace XFILE
       virtual std::string GetLocalizedName() const;
 
       CDirectoryNode* GetParent() const;
-      bool CanCache() const;
+      virtual bool CanCache() const;
+
+      std::string BuildPath() const;
 
     protected:
       CDirectoryNode(NODE_TYPE Type, const std::string& strName, CDirectoryNode* pParent);
@@ -88,11 +91,6 @@ namespace XFILE
       void RemoveParent();
 
       virtual bool GetContent(CFileItemList& items) const;
-
-      std::string BuildPath() const;
-
-    private:
-      void AddQueuingFolder(CFileItemList& items) const;
 
     private:
       NODE_TYPE m_Type;

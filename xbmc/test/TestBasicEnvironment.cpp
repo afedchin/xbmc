@@ -20,6 +20,7 @@
 
 #include "TestBasicEnvironment.h"
 #include "TestUtils.h"
+#include "cores/AudioEngine/Engines/ActiveAE/AudioDSPAddons/ActiveAEDSP.h"
 #include "filesystem/Directory.h"
 #include "filesystem/File.h"
 #include "filesystem/SpecialProtocol.h"
@@ -28,6 +29,14 @@
 #include "settings/Settings.h"
 #include "Util.h"
 #include "Application.h"
+#include "interfaces/AnnouncementManager.h"
+#include "addons/BinaryAddonCache.h"
+#include "interfaces/python/XBPython.h"
+#include "pvr/PVRManager.h"
+
+#if defined(TARGET_WINDOWS)
+#include "win32/WIN32Util.h"
+#endif
 
 #include <cstdio>
 #include <cstdlib>
@@ -36,6 +45,10 @@
 void TestBasicEnvironment::SetUp()
 {
   XFILE::CFile *f;
+
+  g_application.m_ServiceManager.reset(new CServiceManager());
+  if (!g_application.m_ServiceManager->Init1())
+    exit(1);
 
   /* NOTE: The below is done to fix memleak warning about unitialized variable
    * in xbmcutil::GlobalsSingleton<CAdvancedSettings>::getInstance().
@@ -57,7 +70,8 @@ void TestBasicEnvironment::SetUp()
   std::string frameworksPath = CUtil::GetFrameworksPath();
   CSpecialProtocol::SetXBMCFrameworksPath(frameworksPath);    
 #endif
-  /* TODO: Something should be done about all the asserts in GUISettings so
+  /** 
+   * @todo Something should be done about all the asserts in GUISettings so
    * that the initialization of these components won't be needed.
    */
   g_powerManager.Initialize();
@@ -78,6 +92,7 @@ void TestBasicEnvironment::SetUp()
   if (!CreateDirectory(lpTempPathBuffer, NULL))
     SetUpError();
   CSpecialProtocol::SetTempPath(lpTempPathBuffer);
+  CWIN32Util::ExtendDllPath(); //Needed for delay loading on windows
 #else
   char buf[MAX_PATH];
   char *tmp;
@@ -87,11 +102,14 @@ void TestBasicEnvironment::SetUp()
   CSpecialProtocol::SetTempPath(tmp);
 #endif
 
+  if (!g_application.m_ServiceManager->Init2())
+	  exit(1);
+
   /* Create and delete a tempfile to initialize the VFS (really to initialize
    * CLibcdio). This is done so that the initialization of the VFS does not
    * affect the performance results of the test cases.
    */
-  /* TODO: Make the initialization of the VFS here optional so it can be
+  /** @todo Make the initialization of the VFS here optional so it can be
    * testable in a test case.
    */
   f = XBMC_CREATETEMPFILE("");
@@ -106,6 +124,8 @@ void TestBasicEnvironment::TearDown()
 {
   std::string xbmcTempPath = CSpecialProtocol::TranslatePath("special://temp/");
   XFILE::CDirectory::Remove(xbmcTempPath);
+  CSettings::GetInstance().Uninitialize();
+  g_application.m_ServiceManager->Deinit();
 }
 
 void TestBasicEnvironment::SetUpError()

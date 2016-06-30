@@ -18,6 +18,9 @@
  *
  */
 
+#include "PVRChannelGroups.h"
+#include "PVRChannelGroupInternal.h"
+
 #include "FileItem.h"
 #include "URL.h"
 #include "settings/Settings.h"
@@ -27,9 +30,6 @@
 #include "pvr/PVRDatabase.h"
 #include "pvr/PVRManager.h"
 #include "pvr/addons/PVRClients.h"
-
-#include "PVRChannelGroups.h"
-#include "PVRChannelGroupInternal.h"
 
 #include <algorithm>
 
@@ -142,7 +142,7 @@ CFileItemPtr CPVRChannelGroups::GetByPath(const std::string &strPath) const
   {
     // check if the path matches
     strCheckPath = StringUtils::Format("channels/%s/%s/", (*it)->IsRadio() ? "radio" : "tv", (*it)->GroupName().c_str());
-    if (StringUtils::StartsWith(strFileName, strCheckPath))
+    if (URIUtils::PathHasParent(strFileName, strCheckPath))
     {
       strFileName.erase(0, strCheckPath.length());
       std::vector<std::string> split(StringUtils::Split(strFileName, '_', 2));
@@ -229,42 +229,6 @@ bool CPVRChannelGroups::Update(bool bChannelsOnly /* = false */)
 
   // persist changes
   return PersistAll() && bReturn;
-}
-
-bool CPVRChannelGroups::UpdateGroupsEntries(const CPVRChannelGroups &groups)
-{
-  CSingleLock lock(m_critSection);
-
-  // go through groups list and check for deleted groups
-  for (int iGroupPtr = m_groups.size() - 1; iGroupPtr > 0; iGroupPtr--)
-  {
-    CPVRChannelGroup existingGroup(*m_groups.at(iGroupPtr));
-    CPVRChannelGroupPtr group = groups.GetByName(existingGroup.GroupName());
-    // user defined group wasn't found
-    if (existingGroup.GroupType() == PVR_GROUP_TYPE_DEFAULT && !group)
-    {
-      CLog::Log(LOGDEBUG, "CPVRChannelGroups - %s - user defined group %s with id '%u' does not exist on the client anymore; deleting it", __FUNCTION__, existingGroup.GroupName().c_str(), existingGroup.GroupID());
-      DeleteGroup(*m_groups.at(iGroupPtr));
-    }
-  }
-
-  // go through the groups list and check for new groups
-  for (std::vector<CPVRChannelGroupPtr>::const_iterator it = groups.m_groups.begin(); it != groups.m_groups.end(); ++it)
-  {
-    // check if this group is present in this container
-    CPVRChannelGroupPtr existingGroup = GetByName((*it)->GroupName());
-
-    // add it if not
-    if (!existingGroup)
-    {
-      CPVRChannelGroupPtr newGroup(CPVRChannelGroupPtr(new CPVRChannelGroup()));
-      newGroup->SetRadio(m_bRadio);
-      newGroup->SetGroupName((*it)->GroupName());
-      m_groups.push_back(newGroup);
-    }
-  }
-
-  return true;
 }
 
 bool CPVRChannelGroups::LoadUserDefinedChannelGroups(void)

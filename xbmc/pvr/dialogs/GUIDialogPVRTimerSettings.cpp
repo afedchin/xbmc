@@ -19,13 +19,12 @@
  */
 
 #include "GUIDialogPVRTimerSettings.h"
-
-#include "addons/include/xbmc_pvr_types.h"
 #include "dialogs/GUIDialogNumeric.h"
 #include "FileItem.h"
+#include "epg/EpgInfoTag.h"
 #include "guilib/GUIWindowManager.h"
 #include "guilib/LocalizeStrings.h"
-#include "pvr/addons/PVRClient.h"
+#include "addons/PVRClient.h"
 #include "pvr/channels/PVRChannelGroupsContainer.h"
 #include "pvr/PVRManager.h"
 #include "pvr/PVRSettings.h"
@@ -72,7 +71,7 @@ using namespace PVR;
 #define ENTRY_ANY_CHANNEL (-1)
 
 CGUIDialogPVRTimerSettings::CGUIDialogPVRTimerSettings() :
-  CGUIDialogSettingsManualBase(WINDOW_DIALOG_PVR_TIMER_SETTING, "DialogPVRTimerSettings.xml"),
+  CGUIDialogSettingsManualBase(WINDOW_DIALOG_PVR_TIMER_SETTING, "DialogSettings.xml"),
   m_bIsRadio(false),
   m_bIsNewTimer(true),
   m_bTimerActive(false),
@@ -95,15 +94,25 @@ CGUIDialogPVRTimerSettings::~CGUIDialogPVRTimerSettings()
 {
 }
 
-void CGUIDialogPVRTimerSettings::SetTimer(CFileItem *item)
+bool CGUIDialogPVRTimerSettings::CanBeActivated() const
 {
-  if (item == NULL)
+  if (!m_timerInfoTag)
   {
-    CLog::Log(LOGERROR, "CGUIDialogPVRTimerSettings::SetTimer - No item");
+    CLog::Log(LOGERROR, "CGUIDialogPVRTimerSettings::CanBeActivated - no timer info tag");
+    return false;
+  }
+  return true;
+}
+
+void CGUIDialogPVRTimerSettings::SetTimer(const CPVRTimerInfoTagPtr &timer)
+{
+  if (!timer)
+  {
+    CLog::Log(LOGERROR, "CGUIDialogPVRTimerSettings::SetTimer - no timer given");
     return;
   }
 
-  m_timerInfoTag = item->GetPVRTimerInfoTag();
+  m_timerInfoTag = timer;
 
   if (!m_timerInfoTag)
   {
@@ -152,7 +161,7 @@ void CGUIDialogPVRTimerSettings::SetTimer(CFileItem *item)
   // Channel
   m_channel = ChannelDescriptor();
 
-  if (m_timerInfoTag->m_iClientChannelUid == PVR_INVALID_CHANNEL_UID)
+  if (m_timerInfoTag->m_iClientChannelUid == PVR_CHANNEL_INVALID_UID)
   {
     bool bChannelSet(false);
     if (m_timerType && m_timerType->IsRepeatingEpgBased())
@@ -170,7 +179,7 @@ void CGUIDialogPVRTimerSettings::SetTimer(CFileItem *item)
       // Select first real (not "Any channel") entry.
       for (const auto &channel : m_channelEntries)
       {
-        if (channel.second.channelUid != PVR_INVALID_CHANNEL_UID)
+        if (channel.second.channelUid != PVR_CHANNEL_INVALID_UID)
         {
           m_channel = channel.second;
           bChannelSet = true;
@@ -180,7 +189,7 @@ void CGUIDialogPVRTimerSettings::SetTimer(CFileItem *item)
     }
 
     if (!bChannelSet)
-      CLog::Log(LOGERROR, "CGUIDialogPVRTimerSettings::SetTimer - Unable to map PVR_INVALID_CHANNEL_UID to channel entry!");
+      CLog::Log(LOGERROR, "CGUIDialogPVRTimerSettings::SetTimer - Unable to map PVR_CHANNEL_INVALID_UID to channel entry!");
   }
   else
   {
@@ -209,6 +218,10 @@ void CGUIDialogPVRTimerSettings::SetTimer(CFileItem *item)
 void CGUIDialogPVRTimerSettings::SetupView()
 {
   CGUIDialogSettingsManualBase::SetupView();
+  SetHeading(19065);
+  SET_CONTROL_HIDDEN(CONTROL_SETTINGS_CUSTOM_BUTTON);
+  SET_CONTROL_LABEL(CONTROL_SETTINGS_OKAY_BUTTON, 186);
+  SET_CONTROL_LABEL(CONTROL_SETTINGS_CANCEL_BUTTON, 222);
   SetButtonLabels();
 }
 
@@ -734,15 +747,19 @@ void CGUIDialogPVRTimerSettings::InitializeTypesList()
         continue;
 
       // Drop TimerTypes that require EPGInfo, if none is populated
-      if (type->RequiresEpgTagOnCreate() && !m_timerInfoTag->HasEpgInfoTag())
+      if (type->RequiresEpgTagOnCreate() && !m_timerInfoTag->GetEpgInfoTag())
         continue;
 
       // Drop TimerTypes without 'Series' EPG attributes if none are set
-      if (type->RequiresEpgSeriesOnCreate() && !m_timerInfoTag->HasSeriesEpgInfoTag())
-        continue;
+      if (type->RequiresEpgSeriesOnCreate())
+      {
+        const EPG::CEpgInfoTagPtr epgTag(m_timerInfoTag->GetEpgInfoTag());
+        if (epgTag && !epgTag->IsSeries())
+          continue;
+      }
 
       // Drop TimerTypes that forbid EPGInfo, if it is populated
-      if (type->ForbidsEpgTagOnCreate() && m_timerInfoTag->HasEpgInfoTag())
+      if (type->ForbidsEpgTagOnCreate() && m_timerInfoTag->GetEpgInfoTag())
         continue;
 
       // Drop TimerTypes that aren't repeating if end time is in the past
@@ -773,7 +790,7 @@ void CGUIDialogPVRTimerSettings::InitializeChannelsList()
   // Add special "any channel" entry (used for epg-based repeating timers).
   m_channelEntries.insert(
     std::make_pair(
-      ENTRY_ANY_CHANNEL, ChannelDescriptor(PVR_INVALID_CHANNEL_UID, 0, g_localizeStrings.Get(809))));
+      ENTRY_ANY_CHANNEL, ChannelDescriptor(PVR_CHANNEL_INVALID_UID, 0, g_localizeStrings.Get(809))));
 }
 
 void CGUIDialogPVRTimerSettings::TypesFiller(

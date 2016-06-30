@@ -39,33 +39,14 @@ struct DVDMessageListItem
     message = NULL;
     priority = 0;
   }
-  DVDMessageListItem(const DVDMessageListItem& item)
-  {
-    if (item.message)
-      message = item.message->Acquire();
-    else
-      message = NULL;
-
-    priority = item.priority;
-  }
+  DVDMessageListItem(const DVDMessageListItem&) = delete;
  ~DVDMessageListItem()
   {
     if(message)
       message->Release();
   }
 
-  DVDMessageListItem& operator=(const DVDMessageListItem& item)
-  {
-    if (message)
-      message->Release();
-    if (item.message)
-      message = item.message->Acquire();
-    else
-      message = NULL;
-
-    priority = item.priority;
-    return *this;
-  }
+  DVDMessageListItem& operator=(const DVDMessageListItem&) = delete;
 
   CDVDMsg* message;
   int priority;
@@ -94,7 +75,7 @@ public:
   void Abort();
   void End();
 
-  MsgQueueReturnCode Put(CDVDMsg* pMsg, int priority = 0);
+  MsgQueueReturnCode Put(CDVDMsg* pMsg, int priority = 0, bool front = true);
 
   /**
    * msg,       message type from DVDMessage.h
@@ -141,7 +122,7 @@ private:
   int m_iMaxDataSize;
   std::string m_owner;
 
-  typedef std::list<DVDMessageListItem> SList;
-  SList m_list;
+  std::list<DVDMessageListItem> m_messages;
+  std::list<DVDMessageListItem> m_prioMessages;
 };
 

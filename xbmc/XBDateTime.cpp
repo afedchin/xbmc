@@ -692,7 +692,7 @@ void CDateTime::FromULargeInt(const ULARGE_INTEGER& time)
 
 bool CDateTime::SetFromDateString(const std::string &date)
 {
-  /* TODO:STRING_CLEANUP */
+  //! @todo STRING_CLEANUP
   if (date.empty())
   {
     SetValid(false);
@@ -1104,6 +1104,69 @@ bool CDateTime::SetFromRFC1123DateTime(const std::string &dateTime)
   int sec  = strtol(date.substr(23, 2).c_str(), NULL, 10);
 
   return SetDateTime(year, month, day, hour, min, sec);
+}
+
+CDateTime CDateTime::FromDateString(const std::string &date)
+{
+  CDateTime dt;
+  dt.SetFromDateString(date);
+  return dt;
+}
+
+CDateTime CDateTime::FromDBDateTime(const std::string &dateTime)
+{
+  CDateTime dt;
+  dt.SetFromDBDateTime(dateTime);
+  return dt;
+}
+
+CDateTime CDateTime::FromDBDate(const std::string &date)
+{
+  CDateTime dt;
+  dt.SetFromDBDate(date);
+  return dt;
+}
+
+CDateTime CDateTime::FromDBTime(const std::string &time)
+{
+  CDateTime dt;
+  dt.SetFromDBTime(time);
+  return dt;
+}
+
+CDateTime CDateTime::FromW3CDate(const std::string &date)
+{
+  CDateTime dt;
+  dt.SetFromW3CDate(date);
+  return dt;
+}
+
+CDateTime CDateTime::FromW3CDateTime(const std::string &date, bool ignoreTimezone /* = false */)
+{
+  CDateTime dt;
+  dt.SetFromW3CDateTime(date, ignoreTimezone);
+  return dt;
+}
+
+CDateTime CDateTime::FromUTCDateTime(const CDateTime &dateTime)
+{
+  CDateTime dt;
+  dt.SetFromUTCDateTime(dateTime);
+  return dt;
+}
+
+CDateTime CDateTime::FromUTCDateTime(const time_t &dateTime)
+{
+  CDateTime dt;
+  dt.SetFromUTCDateTime(dateTime);
+  return dt;
+}
+
+CDateTime CDateTime::FromRFC1123DateTime(const std::string &dateTime)
+{
+  CDateTime dt;
+  dt.SetFromRFC1123DateTime(dateTime);
+  return dt;
 }
 
 std::string CDateTime::GetAsLocalizedTime(const std::string &format, bool withSeconds) const

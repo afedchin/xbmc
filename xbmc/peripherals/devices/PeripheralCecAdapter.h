@@ -50,6 +50,7 @@ namespace PERIPHERALS
 #include "threads/Thread.h"
 #include "threads/CriticalSection.h"
 #include <queue>
+#include <vector>
 
 // undefine macro isset, it collides with function in cectypes.h
 #ifdef isset
@@ -90,7 +91,7 @@ namespace PERIPHERALS
     friend class CPeripheralCecAdapterReopenJob;
 
   public:
-    CPeripheralCecAdapter(const PeripheralScanResult& scanResult);
+    CPeripheralCecAdapter(const PeripheralScanResult& scanResult, CPeripheralBus* bus);
     virtual ~CPeripheralCecAdapter(void);
 
     void Announce(ANNOUNCEMENT::AnnouncementFlag flag, const char *sender, const char *message, const CVariant &data);

@@ -40,6 +40,7 @@
 
 #include <list>
 #include <map>
+#include <vector>
 
 namespace MUSIC_INFO
 {
@@ -196,10 +197,8 @@ public:
   bool GetDisplayAfterSeek();
   void SetDisplayAfterSeek(unsigned int timeOut = 2500, int seekOffset = 0);
   void SetShowTime(bool showtime) { m_playerShowTime = showtime; };
-  void SetShowCodec(bool showcodec) { m_playerShowCodec = showcodec; };
   void SetShowInfo(bool showinfo) { m_playerShowInfo = showinfo; };
   bool GetShowInfo() const { return m_playerShowInfo; }
-  void ToggleShowCodec() { m_playerShowCodec = !m_playerShowCodec; };
   bool ToggleShowInfo() { m_playerShowInfo = !m_playerShowInfo; return m_playerShowInfo; };
   bool IsPlayerChannelPreviewActive() const;
 
@@ -325,7 +324,6 @@ protected:
   unsigned int m_AfterSeekTimeout;
   int m_seekOffset;
   bool m_playerShowTime;
-  bool m_playerShowCodec;
   bool m_playerShowInfo;
 
   // FPS counters
@@ -356,6 +354,9 @@ protected:
   SPlayerAudioStreamInfo m_audioInfo;
 
   CCriticalSection m_critInfo;
+
+private:
+  static std::string FormatRatingAndVotes(float rating, int votes);
 };
 
 /*!

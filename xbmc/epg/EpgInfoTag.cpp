@@ -18,10 +18,11 @@
  *
  */
 
-#include "addons/include/xbmc_pvr_types.h"
+#include "addons/kodi-addon-dev-kit/include/kodi/xbmc_pvr_types.h"
 #include "guilib/LocalizeStrings.h"
 #include "pvr/PVRManager.h"
 #include "pvr/addons/PVRClients.h"
+#include "pvr/timers/PVRTimers.h"
 #include "settings/AdvancedSettings.h"
 #include "settings/Settings.h"
 #include "utils/log.h"
@@ -51,7 +52,7 @@ CEpgInfoTag::CEpgInfoTag(void) :
     m_iSeriesNumber(0),
     m_iEpisodeNumber(0),
     m_iEpisodePart(0),
-    m_iUniqueBroadcastID(0),
+    m_iUniqueBroadcastID(EPG_TAG_INVALID_UID),
     m_iYear(0),
     m_epg(NULL),
     m_iFlags(EPG_TAG_FLAG_UNDEFINED)
@@ -68,7 +69,7 @@ CEpgInfoTag::CEpgInfoTag(CEpg *epg, PVR::CPVRChannelPtr pvrChannel, const std::s
     m_iSeriesNumber(0),
     m_iEpisodeNumber(0),
     m_iEpisodePart(0),
-    m_iUniqueBroadcastID(0),
+    m_iUniqueBroadcastID(EPG_TAG_INVALID_UID),
     m_iYear(0),
     m_strIconPath(strIconPath),
     m_epg(epg),
@@ -88,7 +89,7 @@ CEpgInfoTag::CEpgInfoTag(const EPG_TAG &data) :
     m_iSeriesNumber(0),
     m_iEpisodeNumber(0),
     m_iEpisodePart(0),
-    m_iUniqueBroadcastID(0),
+    m_iUniqueBroadcastID(EPG_TAG_INVALID_UID),
     m_epg(NULL)
 {
   m_startTime = (data.startTime + g_advancedSettings.m_iPVRTimeCorrection);
@@ -133,8 +134,6 @@ CEpgInfoTag::CEpgInfoTag(const EPG_TAG &data) :
 
 CEpgInfoTag::~CEpgInfoTag()
 {
-  ClearTimer();
-  ClearRecording();
 }
 
 bool CEpgInfoTag::operator ==(const CEpgInfoTag& right) const
@@ -263,9 +262,9 @@ float CEpgInfoTag::ProgressPercentage(void) const
   iDuration = endTime - startTime > 0 ? endTime - startTime : 3600;
 
   if (currentTime >= startTime && currentTime <= endTime)
-    fReturn = ((float) currentTime - startTime) / iDuration * 100;
+    fReturn = static_cast<float>(currentTime - startTime) * 100.0f / iDuration;
   else if (currentTime > endTime)
-    fReturn = 100;
+    fReturn = 100.0f;
 
   return fReturn;
 }
@@ -287,11 +286,6 @@ int CEpgInfoTag::Progress(void) const
 CEpgInfoTagPtr CEpgInfoTag::GetNextEvent(void) const
 {
   return GetTable()->GetNextEvent(*this);
-}
-
-CEpgInfoTagPtr CEpgInfoTag::GetPreviousEvent(void) const
-{
-  return GetTable()->GetPreviousEvent(*this);
 }
 
 void CEpgInfoTag::SetUniqueBroadcastID(unsigned int iUniqueBroadcastID)
@@ -712,7 +706,7 @@ const int CEpgInfoTag::EpgID(void) const
   return m_epg ? m_epg->EpgID() : -1;
 }
 
-void CEpgInfoTag::SetTimer(CPVRTimerInfoTagPtr timer)
+void CEpgInfoTag::SetTimer(const CPVRTimerInfoTagPtr &timer)
 {
   m_timer = timer;
 }
@@ -755,4 +749,13 @@ CPVRRecordingPtr CEpgInfoTag::Recording(void) const
 void CEpgInfoTag::SetEpg(CEpg *epg)
 {
   m_epg = epg;
+}
+
+bool CEpgInfoTag::IsSeries(void) const
+{
+  CSingleLock lock(m_critSection);
+  if ((m_iFlags & EPG_TAG_FLAG_IS_SERIES) > 0 || SeriesNumber() > 0 || EpisodeNumber() > 0 || EpisodePart() > 0)
+    return true;
+  else
+    return false;
 }

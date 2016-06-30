@@ -23,8 +23,8 @@
 #import <OpenGLES/ES2/gl.h>
 #import <AudioToolbox/AudioToolbox.h>
 
-#import "XBMC_events.h"
-#include "XBMC_keysym.h"
+#import "windowing/XBMC_events.h"
+#include "input/XBMC_keysym.h"
 
 @class IOSEAGLView;
 
@@ -94,6 +94,7 @@ typedef enum
 - (bool) changeScreen: (unsigned int)screenIdx withMode:(UIScreenMode *)mode;
 - (void) activateScreen: (UIScreen *)screen withOrientation:(UIInterfaceOrientation)newOrientation;
 - (id)   initWithFrame:(CGRect)frame withScreen:(UIScreen *)screen;
+- (void*) getEAGLContextObj;
 @end
 
 extern XBMCController *g_xbmcController;

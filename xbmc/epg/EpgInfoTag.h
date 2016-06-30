@@ -21,9 +21,10 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "XBDateTime.h"
-#include "addons/include/xbmc_pvr_types.h"
+#include "addons/kodi-addon-dev-kit/include/kodi/xbmc_pvr_types.h"
 #include "pvr/channels/PVRChannel.h"
 #include "pvr/timers/PVRTimerInfoTag.h"
 #include "utils/ISerializable.h"
@@ -50,6 +51,12 @@ namespace EPG
      */
     static CEpgInfoTagPtr CreateDefaultTag();
 
+    /*!
+     * @brief Create a new EPG infotag with 'data' as content.
+     * @param data The tag's content.
+     */
+    CEpgInfoTag(const EPG_TAG &data);
+
   private:
     /*!
      * @brief Create a new empty event.
@@ -61,23 +68,8 @@ namespace EPG
      */
     CEpgInfoTag(CEpg *epg, PVR::CPVRChannelPtr pvrChannel, const std::string &strTableName = "", const std::string &strIconPath = "");
 
-    /*!
-     * @brief Create a new EPG infotag with 'data' as content.
-     * @param data The tag's content.
-     */
-    CEpgInfoTag(const EPG_TAG &data);
-
-    // Prevent copy construction, even for CEpgInfoTag instances and friends.
-    // Note: Only declared, but intentionally not implemented
-    //       to prevent compiler generated copy ctor and to force
-    //       a linker error in case somebody tries to call it.
-    CEpgInfoTag(const CEpgInfoTag &tag);
-
-    // Prevent copy by assignment, even for CEpgInfoTag instances and friends.
-    // Note: Only declared, but intentionally not implemented
-    //       to prevent compiler generated assignment operator and to force
-    //       a linker error in case somebody tries to call it.
-    CEpgInfoTag &operator =(const CEpgInfoTag &other);
+    CEpgInfoTag(const CEpgInfoTag &tag) = delete;
+    CEpgInfoTag &operator =(const CEpgInfoTag &other) = delete;
 
   public:
     virtual ~CEpgInfoTag();
@@ -118,12 +110,6 @@ namespace EPG
      * @return A pointer to the next event or NULL if it's not set.
      */
     CEpgInfoTagPtr GetNextEvent(void) const;
-
-    /*!
-     * @brief Get a pointer to the previous event. Set by CEpg in a call to Sort()
-     * @return A pointer to the previous event or NULL if it's not set.
-     */
-    CEpgInfoTagPtr GetPreviousEvent(void) const;
 
     /*!
      * @brief The table this event belongs to
@@ -320,10 +306,14 @@ namespace EPG
     std::string Path(void) const;
 
     /*!
-     * @brief Set a timer for this event or NULL to clear it.
-     * @param newTimer The new timer value.
+     * @brief Set a timer for this event.
+     * @param timer The timer.
      */
-    void SetTimer(PVR::CPVRTimerInfoTagPtr newTimer);
+    void SetTimer(const PVR::CPVRTimerInfoTagPtr &timer);
+
+    /*!
+     * @brief Clear the timer for this event.
+     */
     void ClearTimer(void);
 
     /*!
@@ -404,9 +394,9 @@ namespace EPG
     bool Update(const CEpgInfoTag &tag, bool bUpdateBroadcastId = true);
 
     /*!
-     * @brief status function to extract IsSeries boolean from EPG iFlags bitfield
+     * @return True if this tag has any series attributes, false otherwise
      */
-    bool IsSeries() const { return (m_iFlags & EPG_TAG_FLAG_IS_SERIES) > 0; }
+    bool IsSeries() const;
 
   private:
 

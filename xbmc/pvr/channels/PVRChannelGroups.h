@@ -19,12 +19,16 @@
  *
  */
 
-#include "FileItem.h"
 #include "threads/CriticalSection.h"
+#include "threads/SingleLock.h"
 
 #include "PVRChannelGroup.h"
 
 #include <vector>
+
+class CFileItem;
+typedef std::shared_ptr<CFileItem> CFileItemPtr;
+class CFileItemList;
 
 namespace PVR
 {
@@ -210,7 +214,6 @@ namespace PVR
     bool Update(bool bChannelsOnly = false);
 
   private:
-    bool UpdateGroupsEntries(const CPVRChannelGroups &groups);
     bool LoadUserDefinedChannelGroups(void);
     bool GetGroupsFromClients(void);
     void SortGroups(void);

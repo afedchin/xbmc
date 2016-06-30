@@ -24,7 +24,6 @@
 /* libraries */
 #define DLL_PATH_CPLUFF        "special://xbmcbin/system/cpluff.dll"
 #define DLL_PATH_LIBEXIF       "special://xbmcbin/system/libexif.dll"
-#define DLL_PATH_LIBGIF        "special://xbmcbin/system/libgif.dll"
 #define DLL_PATH_LIBCURL       "special://xbmcbin/system/libcurl.dll"
 #define DLL_PATH_LIBNFS        "special://xbmcbin/system/libnfs.dll"
 #define DLL_PATH_LIBPLIST      "special://xbmcbin/system/airplay/libplist.dll"
@@ -34,7 +33,6 @@
 /* VideoPlayer */
 #define DLL_PATH_LIBASS        "special://xbmcbin/system/players/dvdplayer/libass.dll"
 #define DLL_PATH_LIBDVDNAV     "special://xbmcbin/system/players/VideoPlayer/libdvdnav.dll"
-#define DLL_PATH_LIBRTMP       "special://xbmcbin/system/players/dvdplayer/librtmp.dll"
 
 /* libbluray */
 #define DLL_PATH_LIBBLURAY     "special://xbmcbin/system/players/dvdplayer/libbluray.dll"

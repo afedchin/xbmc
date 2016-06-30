@@ -32,16 +32,15 @@
 #include "settings/AdvancedSettings.h"
 #include "threads/SingleLock.h"
 #include "utils/MathUtils.h"
-#include "utils/TimeUtils.h"
 #include "utils/log.h"
-#include "win32/WIN32Util.h"
 #include "win32/dxerr.h"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "dxguid.lib")
 
-#define RATIONAL_TO_FLOAT(rational) ((rational.Denominator != 0) ? (float)rational.Numerator / (float)rational.Denominator : 0.0)
+#define RATIONAL_TO_FLOAT(rational) ((rational.Denominator != 0) ? \
+ static_cast<float>(rational.Numerator) / static_cast<float>(rational.Denominator) : 0.0f)
 
 using namespace DirectX::PackedVector;
 
@@ -49,52 +48,12 @@ CRenderSystemDX::CRenderSystemDX() : CRenderSystemBase()
 {
   m_enumRenderingSystem = RENDERING_SYSTEM_DIRECTX;
 
-  m_hFocusWnd   = NULL;
-  m_hDeviceWnd  = NULL;
-  m_nBackBufferWidth  = 0;
-  m_nBackBufferHeight = 0;
-  m_bFullScreenDevice = false;
-  m_bVSync          = true;
-  m_nDeviceStatus   = S_OK;
-  m_inScene         = false;
-  m_needNewDevice   = false;
-  m_resizeInProgress = false;
-  m_screenHeight    = 0;
-  m_systemFreq      = CurrentHostFrequency();
+  m_bVSync = true;
 
-  m_defaultD3DUsage = D3D11_USAGE_DEFAULT;
-
-  m_featureLevel = D3D_FEATURE_LEVEL_11_1;
-  m_driverType = D3D_DRIVER_TYPE_HARDWARE;
-  m_adapter = NULL;
-  m_adapterIndex = -1;
-  m_pOutput = NULL;
-  m_dxgiFactory = NULL;
-  m_pD3DDev = NULL;
-  m_pImdContext = NULL;
-  m_pContext = NULL;
-
-  m_pSwapChain = NULL;
-  m_pSwapChain1 = NULL;
-  m_pRenderTargetView = NULL;
-  m_depthStencilState = NULL;
-  m_depthStencilView = NULL;
-  m_BlendEnableState = NULL;
-  m_BlendDisableState = NULL;
-  m_BlendEnabled = false;
-  m_RSScissorDisable = NULL;
-  m_RSScissorEnable = NULL;
-  m_ScissorsEnabled = false;
-
-  m_pTextureRight = NULL;
-  m_pRenderTargetViewRight = NULL;
-  m_pShaderResourceViewRight = NULL;
-  m_pGUIShader = NULL;
-  m_bResizeRequred = false;
-  m_bHWStereoEnabled = false;
   ZeroMemory(&m_cachedMode, sizeof(m_cachedMode));
   ZeroMemory(&m_viewPort, sizeof(m_viewPort));
   ZeroMemory(&m_scissor, sizeof(CRect));
+  ZeroMemory(&m_adapterDesc, sizeof(DXGI_ADAPTER_DESC));
 }
 
 CRenderSystemDX::~CRenderSystemDX()
@@ -139,33 +98,31 @@ void CRenderSystemDX::SetMonitor(HMONITOR monitor)
   IDXGIAdapter1*  pAdapter;
   for (unsigned i = 0; m_dxgiFactory->EnumAdapters1(i, &pAdapter) != DXGI_ERROR_NOT_FOUND; ++i)
   {
+    DXGI_ADAPTER_DESC1 adaperDesc;
+    pAdapter->GetDesc1(&adaperDesc);
+
     IDXGIOutput* pOutput;
     for (unsigned j = 0; pAdapter->EnumOutputs(j, &pOutput) != DXGI_ERROR_NOT_FOUND; ++j)
     {
-      if (FAILED(pOutput->GetDesc(&outputDesc)))
-        break;
-
+      pOutput->GetDesc(&outputDesc);
       if (outputDesc.Monitor == monitor)
       {
+        CLog::Log(LOGDEBUG, __FUNCTION__" - Selected %S output. ", outputDesc.DeviceName);
+
         // update monitor info
         SAFE_RELEASE(m_pOutput);
         m_pOutput = pOutput;
 
-        CLog::Log(LOGDEBUG, __FUNCTION__" - Selected %S output. ", outputDesc.DeviceName);
-
         // check if adapter is changed
-        if (m_adapterIndex != i)
+        if ( m_adapterDesc.AdapterLuid.HighPart != adaperDesc.AdapterLuid.HighPart 
+          || m_adapterDesc.AdapterLuid.LowPart != adaperDesc.AdapterLuid.LowPart)
         {
-          pAdapter->GetDesc(&m_adapterDesc);
-
           CLog::Log(LOGDEBUG, __FUNCTION__" - Selected %S adapter. ", m_adapterDesc.Description);
 
+          pAdapter->GetDesc(&m_adapterDesc);
           SAFE_RELEASE(m_adapter);
           m_adapter = pAdapter;
-
           m_needNewDevice = true;
-          m_adapterIndex = i;
-
           return;
         }
 
@@ -182,7 +139,7 @@ bool CRenderSystemDX::ResetRenderSystem(int width, int height, bool fullScreen, 
   if (!m_pD3DDev)
     return false;
 
-  if (m_hDeviceWnd != NULL)
+  if (m_hDeviceWnd != nullptr)
   {
     HMONITOR hMonitor = MonitorFromWindow(m_hDeviceWnd, MONITOR_DEFAULTTONULL);
     if (hMonitor)
@@ -196,10 +153,8 @@ bool CRenderSystemDX::ResetRenderSystem(int width, int height, bool fullScreen, 
 
   if (!m_needNewDevice)
   {
-    CreateWindowSizeDependentResources();
     SetFullScreenInternal();
-    if (m_bResizeRequred)
-      CreateWindowSizeDependentResources();
+    CreateWindowSizeDependentResources();
   }
   else 
   {
@@ -219,7 +174,7 @@ void CRenderSystemDX::OnMove()
   m_pOutput->GetDesc(&outputDesc);
   HMONITOR newMonitor = MonitorFromWindow(m_hDeviceWnd, MONITOR_DEFAULTTONULL);
 
-  if (newMonitor != NULL && outputDesc.Monitor != newMonitor)
+  if (newMonitor != nullptr && outputDesc.Monitor != newMonitor)
   {
     SetMonitor(newMonitor);
     if (m_needNewDevice)
@@ -291,12 +246,12 @@ void CRenderSystemDX::GetDisplayMode(DXGI_MODE_DESC *mode, bool useCached /*= fa
 
 inline void DXWait(ID3D11Device* pDevice, ID3D11DeviceContext* pContext)
 {
-  ID3D11Query* wait = NULL;
+  ID3D11Query* wait = nullptr;
   CD3D11_QUERY_DESC qd(D3D11_QUERY_EVENT);
   if (SUCCEEDED(pDevice->CreateQuery(&qd, &wait)))
   {
     pContext->End(wait);
-    while (S_FALSE == pContext->GetData(wait, NULL, 0, 0))
+    while (S_FALSE == pContext->GetData(wait, nullptr, 0, 0))
       Sleep(1);
   }
   SAFE_RELEASE(wait);
@@ -309,14 +264,15 @@ void CRenderSystemDX::SetFullScreenInternal()
 
   HRESULT hr = S_OK;
   BOOL bFullScreen;
-  m_pSwapChain->GetFullscreenState(&bFullScreen, NULL);
+  m_pSwapChain->GetFullscreenState(&bFullScreen, nullptr);
 
   // full-screen to windowed translation. Only change FS state and return
   if (!!bFullScreen && m_useWindowedDX)
   {
     CLog::Log(LOGDEBUG, "%s - Switching swap chain to windowed mode.", __FUNCTION__);
 
-    hr = m_pSwapChain->SetFullscreenState(false, NULL);
+    OnDisplayLost();
+    hr = m_pSwapChain->SetFullscreenState(false, nullptr);
     if (SUCCEEDED(hr))
       m_bResizeRequred = true;
     else
@@ -325,7 +281,7 @@ void CRenderSystemDX::SetFullScreenInternal()
   // true full-screen
   else if (m_bFullScreenDevice && !m_useWindowedDX)
   {
-    IDXGIOutput* pOutput = NULL;
+    IDXGIOutput* pOutput = nullptr;
     m_pSwapChain->GetContainingOutput(&pOutput);
 
     DXGI_OUTPUT_DESC trgDesc, currDesc;
@@ -337,6 +293,7 @@ void CRenderSystemDX::SetFullScreenInternal()
       // swap chain requires to change FS mode after resize or transition from windowed to full-screen.
       CLog::Log(LOGDEBUG, "%s - Switching swap chain to fullscreen state.", __FUNCTION__);
 
+      OnDisplayLost();
       hr = m_pSwapChain->SetFullscreenState(true, m_pOutput);
       if (SUCCEEDED(hr))
         m_bResizeRequred = true;
@@ -345,9 +302,9 @@ void CRenderSystemDX::SetFullScreenInternal()
     }
     SAFE_RELEASE(pOutput);
 
-    // do not change modes if hw stereo
-    if (g_graphicsContext.GetStereoMode() == RENDER_STEREO_MODE_HARDWAREBASED)
-      return;
+    // do not change modes if hw stereo enabled
+    if (m_bHWStereoEnabled)
+      goto end;
 
     DXGI_SWAP_CHAIN_DESC scDesc;
     m_pSwapChain->GetDesc(&scDesc);
@@ -386,6 +343,9 @@ void CRenderSystemDX::SetFullScreenInternal()
       // change monitor resolution (in fullscreen mode) to required mode
       CLog::Log(LOGDEBUG, "%s - Switching mode to %dx%d@%0.3f.", __FUNCTION__, matchedMode.Width, matchedMode.Height, matchedRefreshRate);
 
+      if (!m_bResizeRequred)
+        OnDisplayLost();
+
       hr = m_pSwapChain->ResizeTarget(&matchedMode);
       if (SUCCEEDED(hr))
         m_bResizeRequred = true;
@@ -393,14 +353,8 @@ void CRenderSystemDX::SetFullScreenInternal()
         CLog::Log(LOGERROR, "%s - Failed to switch output mode: %s", __FUNCTION__, GetErrorDescription(hr).c_str());
     }
   }
-
-  // wait until switching screen state is done
-  if (m_bResizeRequred)
-  {
-    OnDisplayLost();
-    DXWait(m_pD3DDev, m_pImdContext);
-    OnDisplayReset();
-  }
+end:
+  SetMaximumFrameLatency();
 }
 
 bool CRenderSystemDX::IsFormatSupport(DXGI_FORMAT format, unsigned int usage)
@@ -413,6 +367,10 @@ bool CRenderSystemDX::IsFormatSupport(DXGI_FORMAT format, unsigned int usage)
 bool CRenderSystemDX::DestroyRenderSystem()
 {
   DeleteDevice();
+
+  // restore stereo setting on exit
+  if (g_advancedSettings.m_useDisplayControlHWStereo)
+    SetDisplayStereoEnabled(m_bDefaultStereoEnabled);
 
   SAFE_RELEASE(m_pOutput);
   SAFE_RELEASE(m_adapter);
@@ -432,7 +390,7 @@ void CRenderSystemDX::DeleteDevice()
     (*i)->OnDestroyDevice();
 
   if (m_pSwapChain)
-    m_pSwapChain->SetFullscreenState(false, NULL);
+    m_pSwapChain->SetFullscreenState(false, nullptr);
 
   SAFE_DELETE(m_pGUIShader);
   SAFE_RELEASE(m_pTextureRight);
@@ -470,6 +428,7 @@ void CRenderSystemDX::DeleteDevice()
   m_bResizeRequred = false;
   m_bHWStereoEnabled = false;
   m_bRenderCreated = false;
+  m_bStereoEnabled = false;
 }
 
 void CRenderSystemDX::OnDeviceLost()
@@ -513,7 +472,6 @@ bool CRenderSystemDX::CreateDevice()
   CSingleLock lock(m_resourceSection);
 
   HRESULT hr;
-
   SAFE_RELEASE(m_pD3DDev);
 
   D3D_FEATURE_LEVEL featureLevels[] =
@@ -532,9 +490,9 @@ bool CRenderSystemDX::CreateDevice()
 #ifdef _DEBUG
   createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
-
+  D3D_DRIVER_TYPE driverType = m_adapter == nullptr ? D3D_DRIVER_TYPE_HARDWARE : D3D_DRIVER_TYPE_UNKNOWN;
   // we should specify D3D_DRIVER_TYPE_UNKNOWN if create device with specified adapter.
-  hr = D3D11CreateDevice(m_adapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, createDeviceFlags, featureLevels, ARRAYSIZE(featureLevels), 
+  hr = D3D11CreateDevice(m_adapter, driverType, nullptr, createDeviceFlags, featureLevels, ARRAYSIZE(featureLevels),
                          D3D11_SDK_VERSION, &m_pD3DDev, &m_featureLevel, &m_pImdContext);
 
   if (FAILED(hr))
@@ -543,7 +501,7 @@ bool CRenderSystemDX::CreateDevice()
     CLog::Log(LOGDEBUG, "%s - First try to create device failed with error: %s.", __FUNCTION__, GetErrorDescription(hr).c_str());
     CLog::Log(LOGDEBUG, "%s - Trying to create device with lowest feature level: %#x.", __FUNCTION__, featureLevels[1]);
 
-    hr = D3D11CreateDevice(m_adapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, createDeviceFlags, &featureLevels[1], ARRAYSIZE(featureLevels) - 1,
+    hr = D3D11CreateDevice(m_adapter, driverType, nullptr, createDeviceFlags, &featureLevels[1], ARRAYSIZE(featureLevels) - 1,
                            D3D11_SDK_VERSION, &m_pD3DDev, &m_featureLevel, &m_pImdContext);
     if (FAILED(hr))
     {
@@ -552,7 +510,7 @@ bool CRenderSystemDX::CreateDevice()
       CLog::Log(LOGDEBUG, "%s - Trying to create device without video API support.", __FUNCTION__);
 
       createDeviceFlags &= ~D3D11_CREATE_DEVICE_VIDEO_SUPPORT;
-      hr = D3D11CreateDevice(m_adapter, D3D_DRIVER_TYPE_UNKNOWN, NULL, createDeviceFlags, &featureLevels[1], ARRAYSIZE(featureLevels) - 1,
+      hr = D3D11CreateDevice(m_adapter, driverType, nullptr, createDeviceFlags, &featureLevels[1], ARRAYSIZE(featureLevels) - 1,
                              D3D11_SDK_VERSION, &m_pD3DDev, &m_featureLevel, &m_pImdContext);
       if (SUCCEEDED(hr))
         CLog::Log(LOGNOTICE, "%s - Your video driver doesn't support DirectX 11 Video Acceleration API. Application is not be able to use hardware video processing and decoding", __FUNCTION__);
@@ -563,6 +521,45 @@ bool CRenderSystemDX::CreateDevice()
   {
     CLog::Log(LOGERROR, "%s - D3D11 device creation failure with error %s.", __FUNCTION__, GetErrorDescription(hr).c_str());
     return false;
+  }
+
+  if (!m_adapter)
+  {
+    // get adapter from device if it was not detected previously
+    IDXGIDevice1* pDXGIDevice = nullptr;
+    if (SUCCEEDED(m_pD3DDev->QueryInterface(__uuidof(IDXGIDevice1), reinterpret_cast<void**>(&pDXGIDevice))))
+    {
+      IDXGIAdapter *pAdapter = nullptr;
+      if (SUCCEEDED(pDXGIDevice->GetAdapter(&pAdapter)))
+      {
+        hr = pAdapter->QueryInterface(__uuidof(IDXGIAdapter1), reinterpret_cast<void**>(&m_adapter));
+        SAFE_RELEASE(pAdapter);
+        if (FAILED(hr))
+          return false;
+
+        m_adapter->GetDesc(&m_adapterDesc);
+        CLog::Log(LOGDEBUG, __FUNCTION__" - Selected %S adapter. ", m_adapterDesc.Description);
+      }
+      SAFE_RELEASE(pDXGIDevice);
+    }
+  }
+
+  if (!m_adapter)
+  {
+    CLog::Log(LOGERROR, "%s - Failed to find adapter.", __FUNCTION__);
+    return false;
+  }
+
+  SAFE_RELEASE(m_dxgiFactory);
+  m_adapter->GetParent(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&m_dxgiFactory));
+
+  if (g_advancedSettings.m_useDisplayControlHWStereo)
+    UpdateDisplayStereoStatus(true);
+
+  if (!m_pOutput)
+  {
+    HMONITOR hMonitor = MonitorFromWindow(m_hDeviceWnd, MONITOR_DEFAULTTONULL);
+    SetMonitor(hMonitor);
   }
 
   if ( g_advancedSettings.m_bAllowDeferredRendering 
@@ -587,23 +584,14 @@ bool CRenderSystemDX::CreateDevice()
 
   // use multi-thread protection on the device context to prevent deadlock issues that can sometimes happen
   // when decoder call ID3D11VideoContext::GetDecoderBuffer or ID3D11VideoContext::ReleaseDecoderBuffer.
-  ID3D10Multithread *pMultiThreading = NULL;
+  ID3D10Multithread *pMultiThreading = nullptr;
   if (SUCCEEDED(m_pD3DDev->QueryInterface(__uuidof(ID3D10Multithread), reinterpret_cast<void**>(&pMultiThreading))))
   {
     pMultiThreading->SetMultithreadProtected(true);
     pMultiThreading->Release();
   }
 
-  IDXGIDevice1* pDXGIDevice = NULL;
-  if (SUCCEEDED(m_pD3DDev->QueryInterface(__uuidof(IDXGIDevice1), reinterpret_cast<void**>(&pDXGIDevice))))
-  {
-    // Not sure the following actually does something but this exists in dx9 implementation
-    pDXGIDevice->SetGPUThreadPriority(7);
-    // Ensure that DXGI does not queue more than one frame at a time. This both reduces
-    // latency and ensures that the application will only render after each VSync
-    pDXGIDevice->SetMaximumFrameLatency(1);
-    SAFE_RELEASE(pDXGIDevice);
-  }
+  SetMaximumFrameLatency();
 
 #ifdef _DEBUG
   if (SUCCEEDED(m_pD3DDev->QueryInterface(__uuidof(ID3D11Debug), reinterpret_cast<void**>(&m_d3dDebug))))
@@ -725,7 +713,9 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
   if (m_pSwapChain)
   {
     m_pSwapChain->GetDesc(&scDesc);
-    bNeedResize = m_bResizeRequred || m_nBackBufferWidth != scDesc.BufferDesc.Width || m_nBackBufferHeight != scDesc.BufferDesc.Height;
+    bNeedResize = m_bResizeRequred || 
+                  m_nBackBufferWidth != scDesc.BufferDesc.Width || 
+                  m_nBackBufferHeight != scDesc.BufferDesc.Height;
   }
   else
     bNeedResize = true;
@@ -734,7 +724,7 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
   {
     DXGI_SWAP_CHAIN_DESC1 scDesc;
     m_pSwapChain1->GetDesc1(&scDesc);
-    bNeedRecreate = (scDesc.Stereo && !bHWStereoEnabled) || (!scDesc.Stereo && bHWStereoEnabled);
+    bNeedRecreate = (scDesc.Stereo == TRUE) != bHWStereoEnabled;
   }
 
   if (!bNeedRecreate && !bNeedResize)
@@ -744,7 +734,6 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
   }
 
   m_resizeInProgress = true;
-
   CLog::Log(LOGDEBUG, "%s - (Re)Create window size (%dx%d) dependent resources.", __FUNCTION__, m_nBackBufferWidth, m_nBackBufferHeight);
 
   bool bRestoreRTView = false;
@@ -752,13 +741,13 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
     ID3D11RenderTargetView* pRTView; ID3D11DepthStencilView* pDSView;
     m_pContext->OMGetRenderTargets(1, &pRTView, &pDSView);
 
-    bRestoreRTView = NULL != pRTView || NULL != pDSView;
+    bRestoreRTView = (nullptr != pRTView || nullptr != pDSView);
 
     SAFE_RELEASE(pRTView);
     SAFE_RELEASE(pDSView);
   }
 
-  m_pContext->OMSetRenderTargets(0, NULL, NULL);
+  m_pContext->OMSetRenderTargets(0, nullptr, nullptr);
   FinishCommandList(false);
 
   SAFE_RELEASE(m_pRenderTargetView);
@@ -769,15 +758,26 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
 
   if (bNeedRecreate)
   {
+    if (!m_bResizeRequred)
+    {
+      OnDisplayLost();
+      m_bResizeRequred = true;
+    }
+
     BOOL fullScreen;
-    m_pSwapChain1->GetFullscreenState(&fullScreen, NULL);
+    m_pSwapChain1->GetFullscreenState(&fullScreen, nullptr);
     if (fullScreen)
-      m_pSwapChain1->SetFullscreenState(false, NULL);
+      m_pSwapChain1->SetFullscreenState(false, nullptr);
+
+    // disable/enable stereo 3D on system level
+    if (g_advancedSettings.m_useDisplayControlHWStereo)
+      SetDisplayStereoEnabled(bHWStereoEnabled);
 
     CLog::Log(LOGDEBUG, "%s - Destroying swapchain in order to switch %s stereoscopic 3D.", __FUNCTION__, bHWStereoEnabled ? "to" : "from");
 
     SAFE_RELEASE(m_pSwapChain);
     SAFE_RELEASE(m_pSwapChain1);
+    m_pImdContext->ClearState();
     m_pImdContext->Flush();
 
     // flush command is asynchronous, so wait until destruction is completed
@@ -785,12 +785,13 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
     DXWait(m_pD3DDev, m_pImdContext);
   }
 
+  uint32_t scFlags = m_useWindowedDX ? 0 : DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
   if (!m_pSwapChain)
   {
     CLog::Log(LOGDEBUG, "%s - Creating swapchain in %s mode.", __FUNCTION__, bHWStereoEnabled ? "Stereoscopic 3D" : "Mono");
 
     // Create swap chain
-    IDXGIFactory2* dxgiFactory2 = NULL;
+    IDXGIFactory2* dxgiFactory2 = nullptr;
     hr = m_dxgiFactory->QueryInterface(__uuidof(IDXGIFactory2), reinterpret_cast<void**>(&dxgiFactory2));
     if (SUCCEEDED(hr) && dxgiFactory2)
     {
@@ -798,13 +799,13 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
       DXGI_SWAP_CHAIN_DESC1 scDesc1 = { 0 };
       scDesc1.Width       = m_nBackBufferWidth;
       scDesc1.Height      = m_nBackBufferHeight;
-      scDesc1.BufferCount = 2;  // Use double buffering to minimize latency.
+      scDesc1.BufferCount = 3 * (1 + bHWStereoEnabled);
       scDesc1.Format      = DXGI_FORMAT_B8G8R8A8_UNORM;
       scDesc1.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
       scDesc1.AlphaMode   = DXGI_ALPHA_MODE_UNSPECIFIED;
       scDesc1.Stereo      = bHWStereoEnabled;
       scDesc1.SwapEffect  = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-      scDesc1.Flags       = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+      scDesc1.Flags       = scFlags;
 
       scDesc1.SampleDesc.Count = 1;
       scDesc1.SampleDesc.Quality = 0;
@@ -813,46 +814,48 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
       scFSDesc.ScanlineOrdering = m_interlaced ? DXGI_MODE_SCANLINE_ORDER_UPPER_FIELD_FIRST : DXGI_MODE_SCANLINE_ORDER_PROGRESSIVE;
       scFSDesc.Windowed         = m_useWindowedDX;
 
-      hr = dxgiFactory2->CreateSwapChainForHwnd(m_pD3DDev, m_hFocusWnd, &scDesc1, &scFSDesc, NULL, &m_pSwapChain1);
+      hr = dxgiFactory2->CreateSwapChainForHwnd(m_pD3DDev, m_hFocusWnd, &scDesc1, &scFSDesc, nullptr, &m_pSwapChain1);
+
+      // some drivers (AMD) are denied to switch in stereoscopic 3D mode, if so then fallback to mono mode
+      if (FAILED(hr) && bHWStereoEnabled)
+      {
+        // switch to stereo mode failed, create mono swapchain
+        CLog::Log(LOGERROR, "%s - Creating stereo swap chain failed with error: %s.", __FUNCTION__, GetErrorDescription(hr).c_str());
+        CLog::Log(LOGNOTICE, "%s - Fallback to monoscopic mode.", __FUNCTION__);
+
+        scDesc1.Stereo = false;
+        bHWStereoEnabled = false;
+        hr = dxgiFactory2->CreateSwapChainForHwnd(m_pD3DDev, m_hFocusWnd, &scDesc1, &scFSDesc, nullptr, &m_pSwapChain1);
+
+        // fallback to split_horisontal mode.
+        g_graphicsContext.SetStereoMode(RENDER_STEREO_MODE_SPLIT_HORIZONTAL);
+      }
 
       if (SUCCEEDED(hr))
       {
         m_pSwapChain1->QueryInterface(__uuidof(IDXGISwapChain), reinterpret_cast<void**>(&m_pSwapChain));
+        // this hackish way to disable stereo in windowed mode:
+        // - restart presenting, 0 in sync interval discards current frame also
+        // - wait until new frame will be drawn
+        // sleep value possible depends on hardware m.b. need a setting in as.xml
+        if (!g_advancedSettings.m_useDisplayControlHWStereo && m_useWindowedDX && !bHWStereoEnabled && m_bHWStereoEnabled)
+        {
+          m_pSwapChain1->Present(0, DXGI_PRESENT_RESTART);
+          Sleep(100);
+        }
         m_bHWStereoEnabled = bHWStereoEnabled;
       }
       dxgiFactory2->Release();
-
-      // this hackish way to disable stereo in windowed mode:
-      // - restart presenting, 0 in sync interval discards current frame also
-      // - wait until new frame will be drawn
-      // sleep value possible depends on hardware m.b. need a setting in as.xml
-      if (!bHWStereoEnabled && m_useWindowedDX && bNeedRecreate)
-      {
-        DXGI_PRESENT_PARAMETERS presentParams = {};
-        presentParams.DirtyRectsCount = 0;
-        presentParams.pDirtyRects = NULL;
-        presentParams.pScrollRect = NULL;
-        m_pSwapChain1->Present1(0, DXGI_PRESENT_RESTART, &presentParams);
-
-        Sleep(100);
-      }
-
-      // when transition from/to stereo mode trigger display reset event
-      if (bNeedRecreate)
-      {
-        OnDisplayLost();
-        OnDeviceReset();
-      }
     }
     else
     {
       // DirectX 11.0 systems
-      scDesc.BufferCount  = 2;  // Use double buffering to minimize latency.
+      scDesc.BufferCount  = 3;
       scDesc.BufferUsage  = DXGI_USAGE_RENDER_TARGET_OUTPUT;
       scDesc.OutputWindow = m_hFocusWnd;
       scDesc.Windowed     = m_useWindowedDX;
       scDesc.SwapEffect   = DXGI_SWAP_EFFECT_SEQUENTIAL;
-      scDesc.Flags        = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+      scDesc.Flags        = scFlags;
 
       scDesc.BufferDesc.Width   = m_nBackBufferWidth;
       scDesc.BufferDesc.Height  = m_nBackBufferHeight;
@@ -878,14 +881,18 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
   else
   {
     // resize swap chain buffers with preserving the existing buffer count and format.
-    hr = m_pSwapChain->ResizeBuffers(scDesc.BufferCount, m_nBackBufferWidth, m_nBackBufferHeight, scDesc.BufferDesc.Format, scDesc.Flags);
+    hr = m_pSwapChain->ResizeBuffers(scDesc.BufferCount, m_nBackBufferWidth, m_nBackBufferHeight, scDesc.BufferDesc.Format, scFlags);
     if (FAILED(hr))
     {
       CLog::Log(LOGERROR, "%s - Failed to resize buffers (%s).", __FUNCTION__, GetErrorDescription(hr).c_str());
       if (DXGI_ERROR_DEVICE_REMOVED == hr)
+      {
         OnDeviceLost();
-
-      return false;
+        return false;
+      }
+      // wait a bit and try again
+      Sleep(50);
+      hr = m_pSwapChain->ResizeBuffers(scDesc.BufferCount, m_nBackBufferWidth, m_nBackBufferHeight, scDesc.BufferDesc.Format, scFlags);
     }
   }
 
@@ -916,7 +923,6 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
     if (FAILED(hr))
     {
       CLog::Log(LOGERROR, "%s - Failed to create right eye buffer (%s).", __FUNCTION__, GetErrorDescription(hr).c_str());
-      pBackBuffer->Release();
       g_graphicsContext.SetStereoMode(RENDER_STEREO_MODE_OFF); // try fallback to mono
     }
   }
@@ -927,11 +933,11 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
   else if (IsFormatSupport(DXGI_FORMAT_D24_UNORM_S8_UINT, D3D11_FORMAT_SUPPORT_DEPTH_STENCIL))  zFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
   else if (IsFormatSupport(DXGI_FORMAT_D16_UNORM, D3D11_FORMAT_SUPPORT_DEPTH_STENCIL))          zFormat = DXGI_FORMAT_D16_UNORM;
 
-  ID3D11Texture2D* depthStencilBuffer = NULL;
+  ID3D11Texture2D* depthStencilBuffer = nullptr;
   // Initialize the description of the depth buffer.
   CD3D11_TEXTURE2D_DESC depthBufferDesc(zFormat, m_nBackBufferWidth, m_nBackBufferHeight, 1, 1, D3D11_BIND_DEPTH_STENCIL);
   // Create the texture for the depth buffer using the filled out description.
-  hr = m_pD3DDev->CreateTexture2D(&depthBufferDesc, NULL, &depthStencilBuffer);
+  hr = m_pD3DDev->CreateTexture2D(&depthBufferDesc, nullptr, &depthStencilBuffer);
   if (FAILED(hr))
   {
     CLog::Log(LOGERROR, "%s - Failed to create depth stencil buffer (%s).", __FUNCTION__, GetErrorDescription(hr).c_str());
@@ -951,7 +957,9 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
 
   if (m_viewPort.Height == 0 || m_viewPort.Width == 0)
   {
-    CRect rect(0, 0, m_nBackBufferWidth, m_nBackBufferHeight);
+    CRect rect(0.0f, 0.0f,
+      static_cast<float>(m_nBackBufferWidth),
+      static_cast<float>(m_nBackBufferHeight));
     SetViewPort(rect);
   }
 
@@ -963,6 +971,10 @@ bool CRenderSystemDX::CreateWindowSizeDependentResources()
 
   if (bRestoreRTView)
     m_pContext->OMSetRenderTargets(1, &m_pRenderTargetView, m_depthStencilView);
+
+  // notify about resurection of display
+  if (m_bResizeRequred)
+    OnDisplayBack();
 
   m_resizeInProgress = false;
   m_bResizeRequred = false;
@@ -993,7 +1005,7 @@ void CRenderSystemDX::CheckInterlasedStereoView(void)
     HRESULT hr;
     CD3D11_TEXTURE2D_DESC texDesc(DXGI_FORMAT_B8G8R8A8_UNORM, m_nBackBufferWidth, m_nBackBufferHeight, 1, 1,
                                   D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE);
-    hr = m_pD3DDev->CreateTexture2D(&texDesc, NULL, &m_pTextureRight);
+    hr = m_pD3DDev->CreateTexture2D(&texDesc, nullptr, &m_pTextureRight);
     if (SUCCEEDED(hr))
     {
       CD3D11_RENDER_TARGET_VIEW_DESC rtDesc(D3D11_RTV_DIMENSION_TEXTURE2D);
@@ -1108,15 +1120,23 @@ bool CRenderSystemDX::CreateStates()
   return true;
 }
 
-bool CRenderSystemDX::PresentRenderImpl(const CDirtyRegionList &dirty)
+void CRenderSystemDX::PresentRenderImpl(bool rendered)
 {
   HRESULT hr;
 
+  if (!rendered)
+    return;
+  
   if (!m_bRenderCreated || m_resizeInProgress)
-    return false;
+    return;
 
   if (m_nDeviceStatus != S_OK)
-    return false;
+  {
+    // if DXGI_STATUS_OCCLUDED occurred we just clear command queue and return
+    if (m_nDeviceStatus == DXGI_STATUS_OCCLUDED)
+      FinishCommandList(false);
+    return;
+  }
 
   if ( m_stereoMode == RENDER_STEREO_MODE_INTERLACED
     || m_stereoMode == RENDER_STEREO_MODE_CHECKERBOARD)
@@ -1128,48 +1148,37 @@ bool CRenderSystemDX::PresentRenderImpl(const CDirtyRegionList &dirty)
                            ? SHADER_METHOD_RENDER_STEREO_INTERLACED_RIGHT
                            : SHADER_METHOD_RENDER_STEREO_CHECKERBOARD_RIGHT;
     SetAlphaBlendEnable(true);
-    CD3DTexture::DrawQuad(destRect, 0, 1, &m_pShaderResourceViewRight, NULL, method);
+    CD3DTexture::DrawQuad(destRect, 0, 1, &m_pShaderResourceViewRight, nullptr, method);
     CD3DHelper::PSClearShaderResources(m_pContext);
   }
 
   FinishCommandList();
+  m_pImdContext->Flush();
 
-  if (m_pSwapChain1)
-  {
-    // will use optimized present with dirty regions.
-    DXGI_PRESENT_PARAMETERS presentParams = {};
-    presentParams.DirtyRectsCount = 0;
-    presentParams.pDirtyRects = NULL;
-    presentParams.pScrollRect = NULL;
-    hr = m_pSwapChain1->Present1((m_bVSync ? 1 : 0), 0, &presentParams);
-  }
-  else 
-    hr = m_pSwapChain->Present((m_bVSync ? 1 : 0), 0);
+  hr = m_pSwapChain->Present((m_bVSync ? 1 : 0), 0);
 
   if (DXGI_ERROR_DEVICE_REMOVED == hr)
   {
     CLog::Log(LOGDEBUG, "%s - device removed", __FUNCTION__);
-    return false;
+    return;
   }
 
   if (DXGI_ERROR_INVALID_CALL == hr)
   {
-    m_bResizeRequred = true;
-    if (CreateWindowSizeDependentResources())
-      hr = S_OK;
+    SetFullScreenInternal();
+    CreateWindowSizeDependentResources();
+    hr = S_OK;
   }
 
   if (FAILED(hr))
   {
     CLog::Log(LOGDEBUG, "%s - Present failed. %s", __FUNCTION__, GetErrorDescription(hr).c_str());
-    return false;
+    return;
   }
 
   // after present swapchain unbinds RT view from immediate context, need to restore it because it can be used by something else
   if (m_pContext == m_pImdContext)
     m_pContext->OMSetRenderTargets(1, &m_pRenderTargetView, m_depthStencilView);
-
-  return true;
 }
 
 bool CRenderSystemDX::BeginRender()
@@ -1178,18 +1187,7 @@ bool CRenderSystemDX::BeginRender()
     return false;
 
   HRESULT oldStatus = m_nDeviceStatus;
-  if (m_pSwapChain1)
-  {
-    DXGI_PRESENT_PARAMETERS presentParams = {};
-    presentParams.DirtyRectsCount = 0;
-    presentParams.pDirtyRects = NULL;
-    presentParams.pScrollRect = NULL;
-    m_nDeviceStatus = m_pSwapChain1->Present1(0, DXGI_PRESENT_TEST, &presentParams);
-  }
-  else
-  {
-    m_nDeviceStatus = m_pSwapChain->Present(0, DXGI_PRESENT_TEST);
-  }
+  m_nDeviceStatus = m_pSwapChain->Present(0, DXGI_PRESENT_TEST);
 
   // handling of return values. 
   switch (m_nDeviceStatus)
@@ -1205,17 +1203,18 @@ bool CRenderSystemDX::BeginRender()
     break;
   case DXGI_ERROR_INVALID_CALL: // application provided invalid parameter data. Try to return after resize buffers
     CLog::Log(LOGERROR, "DXGI_ERROR_INVALID_CALL");
-    m_bResizeRequred = true;
-    if (CreateWindowSizeDependentResources())
-      m_nDeviceStatus = S_OK;
+    // in most cases when DXGI_ERROR_INVALID_CALL occurs it means what DXGI silently leaves from FSE mode.
+    // if so, we should return for FSE mode and resize buffers
+    SetFullScreenInternal();
+    CreateWindowSizeDependentResources();
+    m_nDeviceStatus = S_OK;
     break;
   case DXGI_STATUS_OCCLUDED: // decide what we should do when windows content is not visible
     // do not spam to log file
     if (m_nDeviceStatus != oldStatus)
       CLog::Log(LOGDEBUG, "DXGI_STATUS_OCCLUDED");
     // Status OCCLUDED is not an error and not handled by FAILED macro, 
-    // but if it occurs we should not render anything, so just return false
-    return false;
+    // but if it occurs we should not render anything, this status will be accounted on present stage
   }
 
   if (FAILED(m_nDeviceStatus))
@@ -1275,17 +1274,15 @@ bool CRenderSystemDX::ClearBuffers(color_t color)
       // for interlaced/checkerboard/hw clear right view
       else if (m_pRenderTargetViewRight)
         pRTView = m_pRenderTargetViewRight;
-
-      // for hw stereo clear depth view also
-      if (m_stereoMode == RENDER_STEREO_MODE_HARDWAREBASED)
-        m_pContext->ClearDepthStencilView(m_depthStencilView, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0, 0);
     }
   }
  
   if (pRTView == nullptr)
     return true;
 
-  CRect clRect(0, 0, m_nBackBufferWidth, m_nBackBufferHeight);
+  CRect clRect(0.0f, 0.0f,
+    static_cast<float>(m_nBackBufferWidth),
+    static_cast<float>(m_nBackBufferHeight));
 
   // Unlike Direct3D 9, D3D11 ClearRenderTargetView always clears full extent of the resource view. 
   // Viewport and scissor settings are not applied. So clear RT by drawing full sized rect with clear color
@@ -1490,7 +1487,7 @@ bool CRenderSystemDX::ScissorsCanEffectClipping()
   if (!m_bRenderCreated)
     return false;
 
-  return m_pGUIShader != NULL && m_pGUIShader->HardwareClipIsPossible();
+  return m_pGUIShader != nullptr && m_pGUIShader->HardwareClipIsPossible();
 }
 
 CRect CRenderSystemDX::ClipRectToScissorRect(const CRect &rect)
@@ -1530,7 +1527,9 @@ void CRenderSystemDX::ResetScissors()
   if (!m_bRenderCreated)
     return;
 
-  m_scissor.SetRect(0, 0, m_nBackBufferWidth, m_nBackBufferHeight);
+  m_scissor.SetRect(0.0f, 0.0f, 
+    static_cast<float>(m_nBackBufferWidth),
+    static_cast<float>(m_nBackBufferHeight));
 
   m_pContext->RSSetState(m_RSScissorDisable);
   m_ScissorsEnabled = false;
@@ -1618,16 +1617,52 @@ void CRenderSystemDX::SetStereoMode(RENDER_STEREO_MODE mode, RENDER_STEREO_VIEW 
   }
 }
 
-bool CRenderSystemDX::SupportsStereo(RENDER_STEREO_MODE mode) const
+bool CRenderSystemDX::GetStereoEnabled() const
 {
-  bool isHWStereoSupport = false;
-  IDXGIFactory2* dxgiFactory2 = NULL;
+  bool result = false;
+
+  IDXGIFactory2* dxgiFactory2 = nullptr;
   if (SUCCEEDED(m_dxgiFactory->QueryInterface(__uuidof(IDXGIFactory2), reinterpret_cast<void**>(&dxgiFactory2))))
-  {
-    isHWStereoSupport = dxgiFactory2 && dxgiFactory2->IsWindowedStereoEnabled();
-  }
+    result = dxgiFactory2->IsWindowedStereoEnabled() == TRUE;
   SAFE_RELEASE(dxgiFactory2);
 
+  return result;
+}
+
+bool CRenderSystemDX::GetDisplayStereoEnabled() const
+{
+  bool result = false;
+
+  IDXGIDisplayControl * pDXGIDisplayControl = nullptr;
+  if (SUCCEEDED(m_dxgiFactory->QueryInterface(__uuidof(IDXGIDisplayControl), reinterpret_cast<void **>(&pDXGIDisplayControl))))
+    result = pDXGIDisplayControl->IsStereoEnabled() == TRUE;
+  SAFE_RELEASE(pDXGIDisplayControl);
+
+  return result;
+}
+
+void CRenderSystemDX::SetDisplayStereoEnabled(bool enable) const
+{
+  IDXGIDisplayControl * pDXGIDisplayControl = nullptr;
+  if (SUCCEEDED(m_dxgiFactory->QueryInterface(__uuidof(IDXGIDisplayControl), reinterpret_cast<void **>(&pDXGIDisplayControl))))
+    pDXGIDisplayControl->SetStereoEnabled(enable);
+  SAFE_RELEASE(pDXGIDisplayControl);
+}
+
+void CRenderSystemDX::UpdateDisplayStereoStatus(bool first)
+{
+  if (first)
+    m_bDefaultStereoEnabled = GetDisplayStereoEnabled();
+
+  if (!first || !m_bDefaultStereoEnabled)
+    SetDisplayStereoEnabled(true);
+
+  m_bStereoEnabled = GetStereoEnabled();
+  SetDisplayStereoEnabled(false);
+}
+
+bool CRenderSystemDX::SupportsStereo(RENDER_STEREO_MODE mode) const
+{
   switch (mode)
   {
     case RENDER_STEREO_MODE_ANAGLYPH_RED_CYAN:
@@ -1637,13 +1672,13 @@ bool CRenderSystemDX::SupportsStereo(RENDER_STEREO_MODE mode) const
     case RENDER_STEREO_MODE_CHECKERBOARD:
       return true;
     case RENDER_STEREO_MODE_HARDWAREBASED:
-      return isHWStereoSupport;
+      return m_bStereoEnabled || GetStereoEnabled();
     default:
       return CRenderSystemBase::SupportsStereo(mode);
   }
 }
 
-void CRenderSystemDX::FlushGPU()
+void CRenderSystemDX::FlushGPU() const
 {
   if (!m_bRenderCreated)
     return;
@@ -1676,16 +1711,16 @@ void CRenderSystemDX::SetAlphaBlendEnable(bool enable)
     return;
 
   float blendFactors[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-  m_pContext->OMSetBlendState(enable ? m_BlendEnableState : m_BlendDisableState, 0, 0xFFFFFFFF);
+  m_pContext->OMSetBlendState(enable ? m_BlendEnableState : m_BlendDisableState, nullptr, 0xFFFFFFFF);
   m_BlendEnabled = enable;
 }
 
-void CRenderSystemDX::FinishCommandList(bool bExecute /*= true*/)
+void CRenderSystemDX::FinishCommandList(bool bExecute /*= true*/) const
 {
   if (m_pImdContext == m_pContext)
     return;
 
-  ID3D11CommandList* pCommandList = NULL;
+  ID3D11CommandList* pCommandList = nullptr;
   if (FAILED(m_pContext->FinishCommandList(true, &pCommandList)))
   {
     CLog::Log(LOGERROR, "%s - Failed to finish command queue.", __FUNCTION__);
@@ -1696,6 +1731,23 @@ void CRenderSystemDX::FinishCommandList(bool bExecute /*= true*/)
     m_pImdContext->ExecuteCommandList(pCommandList, false);
 
   SAFE_RELEASE(pCommandList);
+}
+
+void CRenderSystemDX::SetMaximumFrameLatency(uint8_t latency) const
+{
+  if (!m_pD3DDev)
+    return;
+
+  IDXGIDevice1* pDXGIDevice = nullptr;
+  if (SUCCEEDED(m_pD3DDev->QueryInterface(__uuidof(IDXGIDevice1), reinterpret_cast<void**>(&pDXGIDevice))))
+  {
+    // in windowed mode DWM uses triple buffering in any case. 
+    // for FSEM we use same buffering to avoid possible shuttering/tearing
+    if (latency == -1)
+      latency = m_useWindowedDX ? 1 : 3;
+    pDXGIDevice->SetMaximumFrameLatency(latency);
+    SAFE_RELEASE(pDXGIDevice);
+  }
 }
 
 #endif
