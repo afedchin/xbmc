@@ -22,6 +22,9 @@
 
 #if defined(TARGET_DARWIN_OSX)
 
+#include <string>
+#include <vector>
+
 #include "windowing/WinSystem.h"
 #include "threads/CriticalSection.h"
 #include "threads/Timer.h"
@@ -61,7 +64,6 @@ public:
   virtual void EnableSystemScreenSaver(bool bEnable);
   virtual bool IsSystemScreenSaverEnabled();
   virtual void ResetOSScreensaver();
-  virtual bool EnableFrameLimiter();
 
   virtual void EnableTextInput(bool bEnable);
   virtual bool IsTextInputEnabled();

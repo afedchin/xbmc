@@ -22,9 +22,6 @@
 #include "GUIDialogVideoBookmarks.h"
 #include "video/VideoDatabase.h"
 #include "Application.h"
-#if defined(HAS_LIBAMCODEC)
-#include "utils/ScreenshotAML.h"
-#endif//HAS_LIBAMCODEC
 #include "pictures/Picture.h"
 #include "dialogs/GUIDialogContextMenu.h"
 #include "view/ViewState.h"
@@ -52,7 +49,7 @@
 
 using namespace KODI::MESSAGING;
 
-#define BOOKMARK_THUMB_WIDTH g_advancedSettings.GetThumbSize()
+#define BOOKMARK_THUMB_WIDTH g_advancedSettings.m_imageRes
 
 #define CONTROL_ADD_BOOKMARK           2
 #define CONTROL_CLEAR_BOOKMARKS        3

@@ -106,7 +106,6 @@ public:
   static const std::string SETTING_VIDEOPLAYER_SEEKSTEPS;
   static const std::string SETTING_VIDEOPLAYER_SEEKDELAY;
   static const std::string SETTING_VIDEOPLAYER_ADJUSTREFRESHRATE;
-  static const std::string SETTING_VIDEOPLAYER_PAUSEAFTERREFRESHCHANGE;
   static const std::string SETTING_VIDEOPLAYER_USEDISPLAYASCLOCK;
   static const std::string SETTING_VIDEOPLAYER_ERRORINASPECT;
   static const std::string SETTING_VIDEOPLAYER_STRETCH43;
@@ -117,6 +116,9 @@ public:
   static const std::string SETTING_VIDEOPLAYER_RENDERMETHOD;
   static const std::string SETTING_VIDEOPLAYER_HQSCALERS;
   static const std::string SETTING_VIDEOPLAYER_USEAMCODEC;
+  static const std::string SETTING_VIDEOPLAYER_USEAMCODECMPEG2;
+  static const std::string SETTING_VIDEOPLAYER_USEAMCODECMPEG4;
+  static const std::string SETTING_VIDEOPLAYER_USEAMCODECH264;
   static const std::string SETTING_VIDEOPLAYER_USEMEDIACODEC;
   static const std::string SETTING_VIDEOPLAYER_USEMEDIACODECSURFACE;
   static const std::string SETTING_VIDEOPLAYER_USEVDPAU;
@@ -132,8 +134,7 @@ public:
   static const std::string SETTING_VIDEOPLAYER_USEDXVA2;
   static const std::string SETTING_VIDEOPLAYER_USEOMXPLAYER;
   static const std::string SETTING_VIDEOPLAYER_USEOMX;
-  static const std::string SETTING_VIDEOPLAYER_USEVIDEOTOOLBOX;
-  static const std::string SETTING_VIDEOPLAYER_USEVDA;
+  static const std::string SETTING_VIDEOPLAYER_USEVTB;
   static const std::string SETTING_VIDEOPLAYER_USEMMAL;
   static const std::string SETTING_VIDEOPLAYER_USESTAGEFRIGHT;
   static const std::string SETTING_VIDEOPLAYER_LIMITGUIUPDATE;
@@ -172,7 +173,6 @@ public:
   static const std::string SETTING_SCRAPERS_MOVIESDEFAULT;
   static const std::string SETTING_SCRAPERS_TVSHOWSDEFAULT;
   static const std::string SETTING_SCRAPERS_MUSICVIDEOSDEFAULT;
-  static const std::string SETTING_PVRMANAGER_ENABLED;
   static const std::string SETTING_PVRMANAGER_HIDECONNECTIONLOSTWARNING;
   static const std::string SETTING_PVRMANAGER_SYNCCHANNELGROUPS;
   static const std::string SETTING_PVRMANAGER_BACKENDCHANNELORDER;
@@ -199,6 +199,7 @@ public:
   static const std::string SETTING_PVRPLAYBACK_CONFIRMCHANNELSWITCH;
   static const std::string SETTING_PVRPLAYBACK_CHANNELENTRYTIMEOUT;
   static const std::string SETTING_PVRPLAYBACK_FPS;
+  static const std::string SETTING_PVRRECORD_INSTANTRECORDACTION;
   static const std::string SETTING_PVRRECORD_INSTANTRECORDTIME;
   static const std::string SETTING_PVRRECORD_DEFAULTPRIORITY;
   static const std::string SETTING_PVRRECORD_DEFAULTLIFETIME;
@@ -251,7 +252,6 @@ public:
   static const std::string SETTING_AUDIOCDS_ENCODER;
   static const std::string SETTING_AUDIOCDS_SETTINGS;
   static const std::string SETTING_AUDIOCDS_EJECTONRIP;
-  static const std::string SETTING_MYMUSIC_STARTWINDOW;
   static const std::string SETTING_MYMUSIC_SONGTHUMBINVIS;
   static const std::string SETTING_MYMUSIC_DEFAULTLIBVIEW;
   static const std::string SETTING_PICTURES_GENERATETHUMBS;
@@ -297,7 +297,9 @@ public:
   static const std::string SETTING_VIDEOSCREEN_BLANKDISPLAYS;
   static const std::string SETTING_VIDEOSCREEN_STEREOSCOPICMODE;
   static const std::string SETTING_VIDEOSCREEN_PREFEREDSTEREOSCOPICMODE;
-  static const std::string SETTING_VIDEOSCREEN_VSYNC;
+  static const std::string SETTING_VIDEOSCREEN_NOOFBUFFERS;
+  static const std::string SETTING_VIDEOSCREEN_3DLUT;
+  static const std::string SETTING_VIDEOSCREEN_DISPLAYPROFILE;
   static const std::string SETTING_VIDEOSCREEN_GUICALIBRATION;
   static const std::string SETTING_VIDEOSCREEN_TESTPATTERN;
   static const std::string SETTING_VIDEOSCREEN_LIMITEDRANGE;
@@ -323,9 +325,10 @@ public:
   static const std::string SETTING_AUDIOOUTPUT_DTSPASSTHROUGH;
   static const std::string SETTING_AUDIOOUTPUT_TRUEHDPASSTHROUGH;
   static const std::string SETTING_AUDIOOUTPUT_DTSHDPASSTHROUGH;
+  static const std::string SETTING_AUDIOOUTPUT_VOLUMESTEPS;
   static const std::string SETTING_INPUT_PERIPHERALS;
   static const std::string SETTING_INPUT_ENABLEMOUSE;
-  static const std::string SETTING_INPUT_ENABLEJOYSTICK;
+  static const std::string SETTING_INPUT_CONTROLLERCONFIG;
   static const std::string SETTING_INPUT_APPLEREMOTEMODE;
   static const std::string SETTING_INPUT_APPLEREMOTEALWAYSON;
   static const std::string SETTING_INPUT_APPLEREMOTESEQUENCETIME;

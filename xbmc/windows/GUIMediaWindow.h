@@ -26,9 +26,9 @@
 #include "guilib/GUIWindow.h"
 #include "playlists/SmartPlayList.h"
 #include "view/GUIViewControl.h"
-#include "view/GUIViewState.h"
 
 class CFileItemList;
+class CGUIViewState;
 
 // base class for all media windows
 class CGUIMediaWindow : public CGUIWindow
@@ -38,37 +38,40 @@ public:
   virtual ~CGUIMediaWindow(void);
 
   // specializations of CGUIControl
-  virtual bool OnAction(const CAction &action);
-  virtual bool OnBack(int actionID);
-  virtual bool OnMessage(CGUIMessage& message);
+  virtual bool OnAction(const CAction &action) override;
+  virtual bool OnBack(int actionID) override;
+  virtual bool OnMessage(CGUIMessage& message) override;
 
   // specializations of CGUIWindow
-  virtual void OnWindowLoaded();
-  virtual void OnWindowUnload();
-  virtual void OnInitWindow();
-  virtual bool IsMediaWindow() const { return true; }
-  int GetViewContainerID() const { return m_viewControl.GetCurrentControl(); }
-  virtual bool HasListItems() const { return true; }
-  virtual CFileItemPtr GetCurrentListItem(int offset = 0);
+  virtual void OnWindowLoaded() override;
+  virtual void OnWindowUnload() override;
+  virtual void OnInitWindow() override;
+  virtual bool IsMediaWindow() const  override { return true; }
+  int GetViewContainerID() const  override { return m_viewControl.GetCurrentControl(); }
+  int GetViewCount() const  override { return m_viewControl.GetViewModeCount(); };
+  virtual bool HasListItems() const  override { return true; }
+  virtual CFileItemPtr GetCurrentListItem(int offset = 0) override;
 
   // custom methods
   virtual bool CanFilterAdvanced() { return m_canFilterAdvanced; }
   virtual bool IsFiltered();
   virtual bool IsSameStartFolder(const std::string &dir);
 
+  virtual std::string GetRootPath() const { return ""; }
+
   const CFileItemList &CurrentDirectory() const;
   const CGUIViewState *GetViewState() const;
 
 protected:
   // specializations of CGUIControlGroup
-  virtual CGUIControl *GetFirstFocusableControl(int id);
+  virtual CGUIControl *GetFirstFocusableControl(int id) override;
 
   // specializations of CGUIWindow
-  virtual void LoadAdditionalTags(TiXmlElement *root);
+  virtual void LoadAdditionalTags(TiXmlElement *root) override;
 
   // custom methods
   virtual void SetupShares();
-  virtual void GoParentFolder();
+  virtual bool GoParentFolder();
   virtual bool OnClick(int iItem, const std::string &player = "");
 
   /* \brief React to a "Select" action on an item in a view.
@@ -80,6 +83,8 @@ protected:
 
   virtual void GetContextButtons(int itemNumber, CContextButtons &buttons);
   virtual bool OnContextButton(int itemNumber, CONTEXT_BUTTON button);
+  virtual bool OnAddMediaSource() { return false; };
+
   virtual void FormatItemLabels(CFileItemList &items, const LABEL_MASKS &labelMasks);
   virtual void UpdateButtons();
   virtual void SaveControlStates() override;
@@ -173,6 +178,8 @@ protected:
    \return Path/URL without the given parameter
    */
   static std::string RemoveParameterFromPath(const std::string &strDirectory, const std::string &strParameter);
+
+  void ProcessRenderLoop(bool renderOnly = false);
 
   XFILE::CVirtualDirectory m_rootDir;
   CGUIViewControl m_viewControl;

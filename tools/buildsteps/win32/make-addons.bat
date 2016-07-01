@@ -24,7 +24,7 @@ FOR %%b IN (%*) DO (
 SETLOCAL DisableDelayedExpansion
 
 rem set Visual C++ build environment
-call "%VS120COMNTOOLS%..\..\VC\bin\vcvars32.bat"
+call "%VS140COMNTOOLS%..\..\VC\bin\vcvars32.bat"
 
 SET WORKDIR=%WORKSPACE%
 
@@ -105,10 +105,10 @@ IF "%addon%" NEQ "" (
 rem execute cmake to generate makefiles processable by nmake
 cmake "%ADDONS_PATH%" -G "NMake Makefiles" ^
       -DCMAKE_BUILD_TYPE=Release ^
-      -DCMAKE_USER_MAKE_RULES_OVERRIDE="%SCRIPTS_PATH%/c-flag-overrides.cmake" ^
-      -DCMAKE_USER_MAKE_RULES_OVERRIDE_CXX="%SCRIPTS_PATH%/cxx-flag-overrides.cmake" ^
+      -DCMAKE_USER_MAKE_RULES_OVERRIDE="%SCRIPTS_PATH%/CFlagOverrides.cmake" ^
+      -DCMAKE_USER_MAKE_RULES_OVERRIDE_CXX="%SCRIPTS_PATH%/CXXFlagOverrides.cmake" ^
       -DCMAKE_INSTALL_PREFIX=%ADDONS_INSTALL_PATH% ^
-      -DAPP_ROOT=%WORKDIR% ^
+      -DCORE_SOURCE_DIR=%WORKDIR% ^
       -DBUILD_DIR=%ADDONS_BUILD_PATH% ^
       -DDEPENDS_PATH=%ADDON_DEPENDS_PATH% ^
       -DPACKAGE_ZIP=ON ^

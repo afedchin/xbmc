@@ -64,7 +64,6 @@ bool CSMB::IsFirstInit = true;
 
 CSMB::CSMB()
 {
-  m_IdleTimeout = 0;
   m_context = NULL;
 #ifdef TARGET_POSIX
   m_OpenConnections = 0;
@@ -305,6 +304,7 @@ CSMBFile::CSMBFile()
   smb.Init();
   m_fd = -1;
   smb.AddActiveConnection();
+  m_allowRetry = true;
 }
 
 CSMBFile::~CSMBFile()
@@ -390,13 +390,13 @@ int CSMBFile::OpenFile(std::string& strAuth)
   std::string strPath = g_passwordManager.GetSMBAuthFilename(strAuth);
 
   fd = smbc_open(strPath.c_str(), O_RDONLY, 0);
-  // TODO: Run a loop here that prompts for our username/password as appropriate?
-  // We have the ability to run a file (eg from a button action) without browsing to
-  // the directory first.  In the case of a password protected share that we do
-  // not have the authentication information for, the above smbc_open() will have
-  // returned negative, and the file will not be opened.  While this is not a particular
-  // likely scenario, we might want to implement prompting for the password in this case.
-  // The code from SMBDirectory can be used for this.
+  //! @todo Run a loop here that prompts for our username/password as appropriate?
+  //! We have the ability to run a file (eg from a button action) without browsing to
+  //! the directory first.  In the case of a password protected share that we do
+  //! not have the authentication information for, the above smbc_open() will have
+  //! returned negative, and the file will not be opened.  While this is not a particular
+  //! likely scenario, we might want to implement prompting for the password in this case.
+  //! The code from SMBDirectory can be used for this.
   if(fd >= 0)
     strAuth = strPath;
 
@@ -515,7 +515,7 @@ ssize_t CSMBFile::Read(void *lpBuf, size_t uiBufSize)
 
   ssize_t bytesRead = smbc_read(m_fd, lpBuf, (int)uiBufSize);
 
-  if ( bytesRead < 0 && errno == EINVAL )
+  if (m_allowRetry && bytesRead < 0 && errno == EINVAL )
   {
     CLog::Log(LOGERROR, "%s - Error( %" PRIdS ", %d, %s ) - Retrying", __FUNCTION__, bytesRead, errno, strerror(errno));
     bytesRead = smbc_read(m_fd, lpBuf, (int)uiBufSize);
@@ -642,4 +642,18 @@ std::string CSMBFile::GetAuthenticatedPath(const CURL &url)
   CURL authURL(url);
   CPasswordManager::GetInstance().AuthenticateURL(authURL);
   return smb.URLEncode(authURL);
+}
+
+int CSMBFile::IoControl(EIoControl request, void* param)
+{
+  if (request == IOCTRL_SEEK_POSSIBLE)
+    return 1;
+
+  if (request == IOCTRL_SET_RETRY)
+  {
+    m_allowRetry = *(bool*) param;
+    return 0;
+  }
+
+  return -1;
 }

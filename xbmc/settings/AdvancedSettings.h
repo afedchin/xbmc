@@ -29,6 +29,12 @@
 #include "settings/lib/ISettingsHandler.h"
 #include "utils/GlobalsHandling.h"
 
+#define CACHE_BUFFER_MODE_INTERNET      0
+#define CACHE_BUFFER_MODE_ALL           1
+#define CACHE_BUFFER_MODE_TRUE_INTERNET 2
+#define CACHE_BUFFER_MODE_NONE          3
+#define CACHE_BUFFER_MODE_REMOTE        4
+
 class CVariant;
 
 class TiXmlElement;
@@ -177,7 +183,6 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     std::vector<RefreshOverride> m_videoAdjustRefreshOverrides;
     std::vector<RefreshVideoLatency> m_videoRefreshLatency;
     float m_videoDefaultLatency;
-    bool m_videoDisableBackgroundDeinterlace;
     int  m_videoCaptureUseOcclusionQuery;
     bool m_DXVACheckCompatibility;
     bool m_DXVACheckCompatibilityPresent;
@@ -234,11 +239,6 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
 
     unsigned int m_fanartRes; ///< \brief the maximal resolution to cache fanart at (assumes 16x9)
     unsigned int m_imageRes;  ///< \brief the maximal resolution to cache images at (assumes 16x9)
-    /*! \brief the maximal size to cache thumbs at, assuming square
-     Used for actual thumbs (eg bookmark thumbs, picture thumbs) rather than cover art which uses m_imageRes instead
-     */
-    unsigned int GetThumbSize() const { return m_imageRes / 2; };
-    bool m_useDDSFanart;
     CPictureScalingAlgorithm::Algorithm m_imageScalingAlgorithm;
 
     int m_sambaclienttimeout;
@@ -259,6 +259,7 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     std::string m_strMusicLibraryAlbumFormat;
     bool m_prioritiseAPEv2tags;
     std::string m_musicItemSeparator;
+    std::vector<std::string> m_musicArtistSeparators;
     std::string m_videoItemSeparator;
     std::vector<std::string> m_musicTagsFromFileFilters;
 
@@ -308,7 +309,6 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     int m_playlistTimeout;
     bool m_GLRectangleHack;
     int m_iSkipLoopFilter;
-    float m_ForcedSwapTime; /* if nonzero, set's the explicit time in ms to allocate for buffer swap */
 
     unsigned int m_RestrictCapsMask;
     float m_sleepBeforeFlip; ///< if greather than zero, XBMC waits for raster to be this amount through the frame prior to calling the flip
@@ -339,12 +339,11 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
 
     bool m_guiVisualizeDirtyRegions;
     int  m_guiAlgorithmDirtyRegions;
-    int  m_guiDirtyRegionNoFlipTimeout;
     unsigned int m_addonPackageFolderSize;
 
-    unsigned int m_cacheMemBufferSize;
-    unsigned int m_networkBufferMode;
-    float m_readBufferFactor;
+    unsigned int m_cacheMemSize;
+    unsigned int m_cacheBufferMode;
+    float m_cacheReadFactor;
 
     bool m_jsonOutputCompact;
     unsigned int m_jsonTcpPort;
@@ -373,6 +372,8 @@ class CAdvancedSettings : public ISettingCallback, public ISettingsHandler
     std::string m_stereoscopicregex_3d;
     std::string m_stereoscopicregex_sbs;
     std::string m_stereoscopicregex_tab;
+
+    bool m_useDisplayControlHWStereo;
 
     /*!< @brief position behavior of ass subtitiles when setting "subtitle position on screen" set to "fixed"
     True to show at the fixed position set in video calibration

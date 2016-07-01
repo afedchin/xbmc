@@ -37,6 +37,7 @@
 #include "filesystem/PipeFile.h"
 #include "GUIInfoManager.h"
 #include "guilib/GUIWindowManager.h"
+#include "input/Key.h"
 #include "interfaces/AnnouncementManager.h"
 #include "messaging/ApplicationMessenger.h"
 #include "music/tags/MusicInfoTag.h"
@@ -625,7 +626,8 @@ void CAirTunesServer::StopServer(bool bWait)
  }
 
 CAirTunesServer::CAirTunesServer(int port, bool nonlocal)
-: CThread("AirTunesActionThread")
+: CThread("AirTunesActionThread"),
+  m_pRaop(nullptr)
 {
   m_port = port;
   m_pLibShairplay = new DllLibShairplay();

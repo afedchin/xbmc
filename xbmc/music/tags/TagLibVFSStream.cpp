@@ -26,8 +26,12 @@ using namespace XFILE;
 using namespace TagLib;
 using namespace MUSIC_INFO;
 
-#ifdef TARGET_WINDOWS
+#if defined(TARGET_WINDOWS) && !defined(BUILDING_WITH_CMAKE)
+#ifdef _DEBUG
+#pragma comment(lib, "tagd.lib")
+#else
 #pragma comment(lib, "tag.lib")
+#endif
 #endif
 
 /*!
@@ -207,7 +211,11 @@ void TagLibVFSStream::removeBlock(TagLib::ulong start, TagLib::ulong length)
   while(bytesRead != 0)
   {
     seek(readPosition);
-    bytesRead = m_file.Read(buffer.data(), bufferLength);
+    ssize_t read = m_file.Read(buffer.data(), bufferLength);
+    if (read < 0)
+      return;// explicit error
+
+    bytesRead = static_cast<TagLib::ulong>(read);
     readPosition += bytesRead;
 
     // Check to see if we just read the last block.  We need to call clear()
@@ -260,7 +268,7 @@ void TagLibVFSStream::seek(long offset, Position p)
       startPos = fileLen;
     else
       return; // wrong Position value
-    
+
     // When parsing some broken files, taglib may try to seek above end of file.
     // If underlying VFS does not move I/O pointer in this case, taglib will parse
     // same part of file several times and ends with error. To prevent this

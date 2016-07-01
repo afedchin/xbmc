@@ -115,6 +115,12 @@ void CEventButtonState::Load()
         - (unsigned char)'0'; // convert <num> to int
       m_joystickName = m_joystickName.substr(2); // extract joyname
     }
+    
+    if (m_mapName.length() > 3 &&
+        (StringUtils::StartsWith(m_mapName, "CC")) ) // custom map - CC:<controllerName>
+    {
+      m_customControllerName = m_mapName.substr(3);
+    }
   }
 }
 
@@ -129,7 +135,7 @@ bool CEventClient::AddPacket(CEventPacket *packet)
   ResetTimeout();
   if ( packet->Size() > 1 )
   {
-    // TODO: limit payload size
+    //! @todo limit payload size
     if (m_seqPackets[ packet->Sequence() ])
     {
       if(!m_bSequenceError)
@@ -237,7 +243,7 @@ bool CEventClient::ProcessPacket(CEventPacket *packet)
     valid = OnPacketBUTTON(packet);
     break;
 
-  case PT_MOUSE:
+  case EVENTPACKET::PT_MOUSE:
     valid = OnPacketMOUSE(packet);
     break;
 
@@ -270,8 +276,8 @@ bool CEventClient::ProcessPacket(CEventPacket *packet)
 
 bool CEventClient::OnPacketHELO(CEventPacket *packet)
 {
-  // TODO: check it last HELO packet was received less than 5 minutes back
-  //       if so, do not show notification of connection.
+  //! @todo check it last HELO packet was received less than 5 minutes back
+  //!       if so, do not show notification of connection.
   if (Greeted())
     return false;
 
@@ -725,7 +731,7 @@ void CEventClient::FreePacketQueues()
   m_seqPackets.clear();
 }
 
-unsigned int CEventClient::GetButtonCode(std::string& joystickName, bool& isAxis, float& amount)
+unsigned int CEventClient::GetButtonCode(std::string& strMapName, bool& isAxis, float& amount, bool &isJoystick)
 {
   CSingleLock lock(m_critSection);
   unsigned int bcode = 0;
@@ -733,7 +739,14 @@ unsigned int CEventClient::GetButtonCode(std::string& joystickName, bool& isAxis
   if ( m_currentButton.Active() )
   {
     bcode = m_currentButton.KeyCode();
-    joystickName = m_currentButton.JoystickName();
+    strMapName = m_currentButton.JoystickName();
+    isJoystick = true;
+    if (strMapName.length() == 0)
+    {
+      strMapName = m_currentButton.CustomControllerName();
+      isJoystick = false;
+    }
+
     isAxis = m_currentButton.Axis();
     amount = m_currentButton.Amount();
 
@@ -756,7 +769,15 @@ unsigned int CEventClient::GetButtonCode(std::string& joystickName, bool& isAxis
   for(it = m_buttonQueue.begin(); bcode == 0 && it != m_buttonQueue.end(); ++it)
   {
     bcode        = it->KeyCode();
-    joystickName = it->JoystickName();
+    strMapName   = it->JoystickName();
+    isJoystick   = true;
+
+    if (strMapName.length() == 0)
+    {
+      strMapName = it->CustomControllerName();
+      isJoystick = false;
+    }
+
     isAxis       = it->Axis();
     amount       = it->Amount();
 

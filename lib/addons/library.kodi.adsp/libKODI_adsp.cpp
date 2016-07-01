@@ -22,8 +22,8 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string>
-#include "../../../addons/library.kodi.adsp/libKODI_adsp.h"
-#include "addons/AddonCallbacks.h"
+#include "addons/kodi-addon-dev-kit/include/kodi/libKODI_adsp.h"
+#include "addons/binary/interfaces/api1/AudioDSP/AddonCallbacksAudioDSP.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -33,6 +33,7 @@
 #endif
 
 using namespace std;
+using namespace V1::KodiAPI::AudioDSP;
 
 extern "C"
 {
@@ -44,7 +45,7 @@ DLLEXPORT void* ADSP_register_me(void *hdl)
     fprintf(stderr, "libKODI_adsp-ERROR: ADSPLib_register_me is called with NULL handle !!!\n");
   else
   {
-    cb = ((AddonCB*)hdl)->ADSPLib_RegisterMe(((AddonCB*)hdl)->addonData);
+    cb = (CB_ADSPLib*)((AddonCB*)hdl)->ADSPLib_RegisterMe(((AddonCB*)hdl)->addonData);
     if (!cb)
       fprintf(stderr, "libKODI_adsp-ERROR: ADSPLib_register_me can't get callback table from KODI !!!\n");
   }
@@ -103,15 +104,15 @@ DLLEXPORT void ADSP_release_sound_play(CAddonSoundPlay* p)
 }
 
 CAddonSoundPlay::CAddonSoundPlay(void *hdl, void *cb, const char *filename)
- : m_Filename(filename)
+ : m_Filename(filename),
+   m_Handle(hdl),
+   m_cb(cb)
 {
   m_PlayHandle = NULL;
   if (!hdl || !cb)
     fprintf(stderr, "libKODI_adsp-ERROR: ADSP_get_sound_play is called with NULL handle !!!\n");
   else
   {
-    m_Handle     = hdl;
-    m_cb         = cb;
     m_PlayHandle = ((CB_ADSPLib*)m_cb)->SoundPlay_GetHandle(((AddonCB*)m_Handle)->addonData, m_Filename.c_str());
     if (!m_PlayHandle)
       fprintf(stderr, "libKODI_adsp-ERROR: ADSP_get_sound_play can't get callback table from KODI !!!\n");

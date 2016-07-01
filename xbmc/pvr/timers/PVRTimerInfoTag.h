@@ -39,7 +39,7 @@
 
 #include <memory>
 
-#include "addons/include/xbmc_pvr_types.h"
+#include "addons/kodi-addon-dev-kit/include/kodi/xbmc_pvr_types.h"
 #include "pvr/timers/PVRTimerType.h"
 #include "threads/CriticalSection.h"
 #include "utils/ISerializable.h"
@@ -86,8 +86,6 @@ namespace PVR
 
     virtual void Serialize(CVariant &value) const;
 
-    int Compare(const CPVRTimerInfoTag &timer) const;
-
     void UpdateSummary(void);
 
     void DisplayError(PVR_ERROR err) const;
@@ -95,19 +93,30 @@ namespace PVR
     std::string GetStatus() const;
     std::string GetTypeAsString() const;
 
-    bool SetDuration(int iDuration);
-
-    static CPVRTimerInfoTagPtr CreateFromEpg(const EPG::CEpgInfoTagPtr &tag, bool bRepeating = false);
-    EPG::CEpgInfoTagPtr GetEpgInfoTag(void) const;
-    /*!
-     * @return True if this timer has a corresponding epg info tag, false otherwise
-     */
-    bool HasEpgInfoTag() const;
+    static const int DEFAULT_PVRRECORD_INSTANTRECORDTIME = -1;
 
     /*!
-     * @return True if this timer has corresponding epg info tag with series attributes, false otherwise
+     * @brief create a tag for an instant timer for a given channel
+     * @param channel is the channel the instant timer is to be created for
+     * @param iDuration is the duration for the instant timer, DEFAULT_PVRRECORD_INSTANTRECORDTIME denotes system default (setting value)
+     * @return the timer or null if timer could not be created
      */
-    bool HasSeriesEpgInfoTag() const;
+    static CPVRTimerInfoTagPtr CreateInstantTimerTag(const CPVRChannelPtr &channel, int iDuration = DEFAULT_PVRRECORD_INSTANTRECORDTIME);
+
+    /*!
+     * @brief create a timer or timer rule for the given epg info tag.
+     * @param tag the epg info tag
+     * @param bCreateRule if true, create a timer rule, create a one shot timer otherwise
+     * @return the timer or null if timer could not be created
+     */
+    static CPVRTimerInfoTagPtr CreateFromEpg(const EPG::CEpgInfoTagPtr &tag, bool bCreateRule = false);
+
+    /*!
+     * @brief get the epg info tag associated with this timer, if any
+     * @param bCreate if true, try to find the epg tag if not yet set (lazy evaluation)
+     * @return the epg info tag associated with this timer or null if there is no tag
+     */
+    EPG::CEpgInfoTagPtr GetEpgInfoTag(bool bCreate = true) const;
 
     int ChannelNumber(void) const;
     std::string ChannelName(void) const;
@@ -131,8 +140,6 @@ namespace PVR
      */
     void ResetChildState();
 
-    void UpdateEpgEvent(bool bClear = false);
-
     bool IsActive(void) const
     {
       return m_state == PVR_TIMER_STATE_SCHEDULED
@@ -150,6 +157,11 @@ namespace PVR
       return m_state == PVR_TIMER_STATE_CONFLICT_NOK
         || m_state == PVR_TIMER_STATE_ERROR;
     }
+
+    /*!
+     * @return True if this timer won't result in a recording because it is in conflict with another timer or live stream, false otherwise
+     */
+    bool HasConflict(void) const { return m_state == PVR_TIMER_STATE_CONFLICT_NOK; }
 
     bool IsRecording(void) const { return m_state == PVR_TIMER_STATE_RECORDING; }
 
@@ -172,10 +184,10 @@ namespace PVR
     void SetTimerType(const CPVRTimerTypePtr &type);
 
     /*!
-      * @brief Checks whether this is a repeating (vs. one-shot) timer.
-      * @return True if this is a repeating timer, false otherwise.
+      * @brief Checks whether this is a timer rule (vs. one time timer).
+      * @return True if this is a timer rule, false otherwise.
       */
-    bool IsRepeating(void) const { return m_timerType && m_timerType->IsRepeating(); }
+    bool IsTimerRule(void) const { return m_timerType && m_timerType->IsTimerRule(); }
 
     /*!
       * @brief Checks whether this is a manual (vs. epg-based) timer.
@@ -195,14 +207,9 @@ namespace PVR
 
     CDateTime FirstDayAsUTC(void) const;
     CDateTime FirstDayAsLocalTime(void) const;
-    void SetFirstDayFromUTC(CDateTime &firstDay) { m_FirstDay = firstDay; }
     void SetFirstDayFromLocalTime(CDateTime &firstDay) { m_FirstDay = firstDay.GetAsUTCDateTime(); }
 
     unsigned int MarginStart(void) const { return m_iMarginStart; }
-    void SetMarginStart(unsigned int iMinutes) { m_iMarginStart = iMinutes; }
-
-    unsigned int MarginEnd(void) const { return m_iMarginEnd; }
-    void SetMarginEnd(unsigned int iMinutes) { m_iMarginEnd = iMinutes; }
 
     /*!
      * @brief Get the text for the notification.
@@ -225,10 +232,22 @@ namespace PVR
     bool RenameOnClient(const std::string &strNewName);
     bool UpdateOnClient();
 
-    void SetEpgInfoTag(EPG::CEpgInfoTagPtr &tag);
+    /*!
+     * @brief Associate the given epg tag with this timer; before, clear old timer at associated epg tag, if any.
+     * @param tag The epg tag to assign.
+     */
+    void SetEpgTag(const EPG::CEpgInfoTagPtr &tag);
+
+    /*!
+     * @brief Clear the epg tag associated with this timer; before, clear this timer at associated epg tag, if any.
+     */
     void ClearEpgTag(void);
 
-    void UpdateChannel(void);
+    /*!
+     * @brief Update the channel associated with this timer.
+     * @return the channel for the timer. Can be empty for epg based repeating timers (e.g. "match any channel" rules)
+     */
+    CPVRChannelPtr UpdateChannel(void);
 
     /*!
      * @brief Return string representation for any possible combination of weekdays.
@@ -246,7 +265,7 @@ namespace PVR
     unsigned int GetTimerRuleId() const { return m_iParentClientIndex; }
 
     std::string           m_strTitle;            /*!< @brief name of this timer */
-    std::string           m_strEpgSearchString;  /*!< @brief a epg data match string for repeating epg-based timers. Format is backend-dependent, for example regexp */
+    std::string           m_strEpgSearchString;  /*!< @brief a epg data match string for epg-based timer rules. Format is backend-dependent, for example regexp */
     bool                  m_bFullTextEpgSearch;  /*!< @brief indicates whether only epg episode title can be matched by the pvr backend or "more" (backend-dependent") data. */
     std::string           m_strDirectory;        /*!< @brief directory where the recording must be stored */
     std::string           m_strSummary;          /*!< @brief summary string with the time to show inside a GUI list */
@@ -260,8 +279,8 @@ namespace PVR
     int                   m_iPriority;           /*!< @brief priority of the timer */
     int                   m_iLifetime;           /*!< @brief lifetime of the timer in days */
     int                   m_iMaxRecordings;      /*!< @brief (optional) backend setting for maximum number of recordings to keep*/
-    unsigned int          m_iWeekdays;           /*!< @brief bit based store of weekdays for repeating timers */
-    unsigned int          m_iPreventDupEpisodes; /*!< @brief only record new episodes for repeating epg based timers */
+    unsigned int          m_iWeekdays;           /*!< @brief bit based store of weekdays for timer rules */
+    unsigned int          m_iPreventDupEpisodes; /*!< @brief only record new episodes for epg-based timer rules */
     unsigned int          m_iRecordingGroup;     /*!< @brief (optional) if set, the addon/backend stores the recording to a group (sub-folder) */
     std::string           m_strFileNameAndPath;  /*!< @brief file name is only for reference */
     int                   m_iChannelNumber;      /*!< @brief integer value of the channel number */
@@ -271,23 +290,23 @@ namespace PVR
     CPVRChannelPtr        m_channel;
     unsigned int          m_iMarginStart;        /*!< @brief (optional) if set, the backend starts the recording iMarginStart minutes before startTime. */
     unsigned int          m_iMarginEnd;          /*!< @brief (optional) if set, the backend ends the recording iMarginEnd minutes after endTime. */
-    std::vector<std::string> m_genre;            /*!< @brief genre of the timer */
-    int                   m_iGenreType;          /*!< @brief genre type of the timer */
-    int                   m_iGenreSubType;       /*!< @brief genre subtype of the timer */
 
   private:
     std::string GetWeekdaysString() const;
+    void UpdateEpgInfoTag(void);
 
     CCriticalSection      m_critSection;
-    EPG::CEpgInfoTagPtr   m_epgTag;
     CDateTime             m_StartTime; /*!< start time */
     CDateTime             m_StopTime;  /*!< stop time */
-    CDateTime             m_FirstDay;  /*!< if it is a manual repeating timer the first date it starts */
+    CDateTime             m_FirstDay;  /*!< if it is a manual timer rule the first date it starts */
     CPVRTimerTypePtr      m_timerType; /*!< the type of this timer */
 
     unsigned int          m_iActiveChildTimers;   /*!< @brief Number of active timers which have this timer as their m_iParentClientIndex */
     bool                  m_bHasChildConflictNOK; /*!< @brief Has at least one child timer with status PVR_TIMER_STATE_CONFLICT_NOK */
     bool                  m_bHasChildRecording;   /*!< @brief Has at least one child timer with status PVR_TIMER_STATE_RECORDING */
     bool                  m_bHasChildErrors;      /*!< @brief Has at least one child timer with status PVR_TIMER_STATE_ERROR */
+
+    mutable unsigned int  m_iEpgUid;   /*!< id of epg event associated with this timer, EPG_TAG_INVALID_UID if none. */
+    mutable EPG::CEpgInfoTagPtr m_epgTag; /*!< epg info tag matching m_iEpgUid. */
   };
 }

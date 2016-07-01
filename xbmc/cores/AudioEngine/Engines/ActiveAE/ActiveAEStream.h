@@ -22,6 +22,7 @@
 #include "cores/AudioEngine/Interfaces/AEStream.h"
 #include "cores/AudioEngine/Utils/AEAudioFormat.h"
 #include "cores/AudioEngine/Utils/AELimiter.h"
+#include <atomic>
 
 namespace ActiveAE
 {
@@ -106,7 +107,7 @@ protected:
 
 public:
   virtual unsigned int GetSpace();
-  virtual unsigned int AddData(uint8_t* const *data, unsigned int offset, unsigned int frames, double pts = 0.0);
+  virtual unsigned int AddData(const uint8_t* const *data, unsigned int offset, unsigned int frames, double pts = 0.0);
   virtual double GetDelay();
   virtual CAESyncInfo GetSyncInfo();
   virtual bool IsBuffering();
@@ -169,6 +170,9 @@ protected:
   CSampleBuffer *m_currentBuffer;
   CSoundPacket *m_remapBuffer;
   IAEResample *m_remapper;
+  double m_lastPts;
+  double m_lastPtsJump;
+  std::atomic_int m_errorInterval;
 
   // only accessed by engine
   CActiveAEBufferPool *m_inputBuffers;

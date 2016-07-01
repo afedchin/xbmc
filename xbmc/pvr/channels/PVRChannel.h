@@ -19,18 +19,18 @@
  *
  */
 
-#include <memory>
-#include <utility>
-
-#include "addons/include/xbmc_pvr_types.h"
-#include "FileItem.h"
+#include "addons/kodi-addon-dev-kit/include/kodi/xbmc_pvr_types.h"
 #include "threads/CriticalSection.h"
 #include "utils/ISerializable.h"
+#include "utils/ISortable.h"
 #include "utils/Observer.h"
 
-#define PVR_INVALID_CHANNEL_UID -1
+#include <memory>
+#include <string>
+#include <utility>
 
 class CVariant;
+class CFileItemList;
 
 namespace EPG
 {
@@ -45,6 +45,9 @@ namespace PVR
 {
   class CPVRDatabase;
   class CPVRChannelGroupInternal;
+
+  class CPVRRecording;
+  typedef std::shared_ptr<CPVRRecording> CPVRRecordingPtr;
 
   class CPVRChannel;
   typedef std::shared_ptr<PVR::CPVRChannel> CPVRChannelPtr;
@@ -145,11 +148,6 @@ namespace PVR
      * @return the channel number, formatted as [channel] or [channel].[subchannel]
      */
     std::string FormattedChannelNumber(void) const;
-
-    /**
-     * @return True when this channel is marked as sub channel by the add-on, false if it's marked as main channel
-     */
-    bool IsClientSubChannel(void) const;
 
     /*!
      * @brief Set to true to hide this channel. Set to false to unhide it.
@@ -360,7 +358,6 @@ namespace PVR
      * @return Return true if this channel is encrypted.
      */
     bool IsEncrypted(void) const;
-
 
     /*!
      * @brief Return the encryption system ID for this channel. 0 for FTA.

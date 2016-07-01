@@ -24,6 +24,7 @@
 #include "DVDVideoCodec.h"
 #include "cores/VideoPlayer/DVDCodecs/DVDCodecUtils.h"
 #include "cores/VideoPlayer/DVDClock.h"
+#include "cores/VideoPlayer/Process/ProcessInfo.h"
 #include "utils/log.h"
 #include "utils/StringUtils.h"
 #include "threads/SingleLock.h"
@@ -34,6 +35,8 @@
 #include <va/va_x11.h>
 #include <va/va_drmcommon.h>
 #include <drm_fourcc.h>
+#include "linux/XTimeUtils.h"
+#include "linux/XMemUtils.h"
 
 extern "C" {
 #include "libavutil/avutil.h"
@@ -70,8 +73,7 @@ void CVAAPIContext::Release(CDecoder *decoder)
 {
   CSingleLock lock(m_section);
 
-  std::vector<CDecoder*>::iterator it;
-  it = find(m_decoders.begin(), m_decoders.end(), decoder);
+  auto it = find(m_decoders.begin(), m_decoders.end(), decoder);
   if (it != m_decoders.end())
     m_decoders.erase(it);
 
@@ -258,8 +260,7 @@ Display *CVAAPIContext::GetX11Display()
 
 bool CVAAPIContext::IsValidDecoder(CDecoder *decoder)
 {
-  std::vector<CDecoder*>::iterator it;
-  it = find(m_decoders.begin(), m_decoders.end(), decoder);
+  auto it = find(m_decoders.begin(), m_decoders.end(), decoder);
   if (it != m_decoders.end())
     return true;
 
@@ -312,8 +313,7 @@ bool CVideoSurfaces::MarkRender(VASurfaceID surf)
     CLog::Log(LOGWARNING, "CVideoSurfaces::MarkRender - surface invalid");
     return false;
   }
-  std::list<VASurfaceID>::iterator it;
-  it = std::find(m_freeSurfaces.begin(), m_freeSurfaces.end(), surf);
+  auto it = std::find(m_freeSurfaces.begin(), m_freeSurfaces.end(), surf);
   if (it != m_freeSurfaces.end())
   {
     m_freeSurfaces.erase(it);
@@ -351,8 +351,7 @@ VASurfaceID CVideoSurfaces::GetFree(VASurfaceID surf)
   CSingleLock lock(m_section);
   if (m_state.find(surf) != m_state.end())
   {
-    std::list<VASurfaceID>::iterator it;
-    it = std::find(m_freeSurfaces.begin(), m_freeSurfaces.end(), surf);
+    auto it = std::find(m_freeSurfaces.begin(), m_freeSurfaces.end(), surf);
     if (it == m_freeSurfaces.end())
     {
       CLog::Log(LOGWARNING, "CVideoSurfaces::GetFree - surface not free");
@@ -381,7 +380,7 @@ VASurfaceID CVideoSurfaces::GetAtIndex(int idx)
   if ((size_t) idx >= m_state.size())
     return VA_INVALID_SURFACE;
 
-  std::map<VASurfaceID, int>::iterator it = m_state.begin();
+  auto it = m_state.begin();
   for(int i = 0; i < idx; i++)
     ++it;
   return it->first;
@@ -391,16 +390,14 @@ VASurfaceID CVideoSurfaces::RemoveNext(bool skiprender)
 {
   CSingleLock lock(m_section);
   VASurfaceID surf;
-  std::map<VASurfaceID, int>::iterator it;
-  for(it = m_state.begin(); it != m_state.end(); ++it)
+  for(auto it = m_state.begin(); it != m_state.end(); ++it)
   {
     if (skiprender && it->second & SURFACE_USED_FOR_RENDER)
       continue;
     surf = it->first;
     m_state.erase(surf);
 
-    std::list<VASurfaceID>::iterator it2;
-    it2 = std::find(m_freeSurfaces.begin(), m_freeSurfaces.end(), surf);
+    auto it2 = std::find(m_freeSurfaces.begin(), m_freeSurfaces.end(), surf);
     if (it2 != m_freeSurfaces.end())
       m_freeSurfaces.erase(it2);
     return surf;
@@ -436,9 +433,9 @@ int CVideoSurfaces::NumFree()
 bool CVideoSurfaces::HasRefs()
 {
   CSingleLock lock(m_section);
-  for (std::map<VASurfaceID, int>::iterator it = m_state.begin(); it != m_state.end(); ++it)
+  for (const auto &i : m_state)
   {
-    if (it->second & SURFACE_USED_FOR_REFERENCE)
+    if (i.second & SURFACE_USED_FOR_REFERENCE)
     return true;
   }
   return false;
@@ -448,17 +445,9 @@ bool CVideoSurfaces::HasRefs()
 // VAAPI
 //-----------------------------------------------------------------------------
 
-// settings codecs mapping
-DVDCodecAvailableType g_vaapi_available[] = {
-  { AV_CODEC_ID_H263, CSettings::SETTING_VIDEOPLAYER_USEVAAPIMPEG4.c_str() },
-  { AV_CODEC_ID_MPEG4, CSettings::SETTING_VIDEOPLAYER_USEVAAPIMPEG4.c_str() },
-  { AV_CODEC_ID_WMV3, CSettings::SETTING_VIDEOPLAYER_USEVAAPIVC1.c_str() },
-  { AV_CODEC_ID_VC1, CSettings::SETTING_VIDEOPLAYER_USEVAAPIVC1.c_str() },
-  { AV_CODEC_ID_MPEG2VIDEO, CSettings::SETTING_VIDEOPLAYER_USEVAAPIMPEG2.c_str() },
-};
-const size_t settings_count = sizeof(g_vaapi_available) / sizeof(DVDCodecAvailableType);
-
-CDecoder::CDecoder() : m_vaapiOutput(&m_inMsgEvent)
+CDecoder::CDecoder(CProcessInfo& processInfo) :
+  m_vaapiOutput(&m_inMsgEvent),
+  m_processInfo(processInfo)
 {
   m_vaapiConfig.videoSurfaces = &m_videoSurfaces;
 
@@ -467,6 +456,7 @@ CDecoder::CDecoder() : m_vaapiOutput(&m_inMsgEvent)
   m_vaapiConfig.context = 0;
   m_vaapiConfig.contextId = VA_INVALID_ID;
   m_vaapiConfig.configId = VA_INVALID_ID;
+  m_vaapiConfig.processInfo = &m_processInfo;
   m_avctx = NULL;
   m_getBufferError = 0;
 }
@@ -497,7 +487,14 @@ bool CDecoder::Open(AVCodecContext* avctx, AVCodecContext* mainctx, const enum A
   }
 
   // check if user wants to decode this format with VAAPI
-  if (CDVDVideoCodec::IsCodecDisabled(g_vaapi_available, settings_count, avctx->codec_id))
+  std::map<AVCodecID, std::string> settings_map = {
+    { AV_CODEC_ID_H263, CSettings::SETTING_VIDEOPLAYER_USEVAAPIMPEG4 },
+    { AV_CODEC_ID_MPEG4, CSettings::SETTING_VIDEOPLAYER_USEVAAPIMPEG4 },
+    { AV_CODEC_ID_WMV3, CSettings::SETTING_VIDEOPLAYER_USEVAAPIVC1 },
+    { AV_CODEC_ID_VC1, CSettings::SETTING_VIDEOPLAYER_USEVAAPIVC1 },
+    { AV_CODEC_ID_MPEG2VIDEO, CSettings::SETTING_VIDEOPLAYER_USEVAAPIMPEG2 },
+  };
+  if (CDVDVideoCodec::IsCodecDisabled(settings_map, avctx->codec_id))
     return false;
 
   if (g_advancedSettings.CanLogComponent(LOGVIDEO))
@@ -749,12 +746,14 @@ int CDecoder::FFGetBuffer(AVCodecContext *avctx, AVFrame *pic, int flags)
 
 void CDecoder::FFReleaseBuffer(uint8_t *data)
 {
-  VASurfaceID surf;
+  {
+    VASurfaceID surf;
 
-  CSingleLock lock(m_DecoderSection);
+    CSingleLock lock(m_DecoderSection);
 
-  surf = (VASurfaceID)(uintptr_t)data;
-  m_videoSurfaces.ClearReference(surf);
+    surf = (VASurfaceID)(uintptr_t)data;
+    m_videoSurfaces.ClearReference(surf);
+  }
 
   IHardwareDecoder::Release();
 }
@@ -2021,6 +2020,7 @@ void COutput::InitCycle()
       delete m_pp;
       m_pp = NULL;
       DropVppProcessedPictures();
+      m_config.processInfo->SetVideoDeintMethod("unknown");
     }
     if (!m_pp)
     {
@@ -2039,6 +2039,17 @@ void COutput::InitCycle()
       {
         m_pp->Init(method);
         m_currentDiMethod = method;
+
+        if (method == VS_INTERLACEMETHOD_DEINTERLACE)
+          m_config.processInfo->SetVideoDeintMethod("yadif");
+        else if (method == VS_INTERLACEMETHOD_RENDER_BOB)
+          m_config.processInfo->SetVideoDeintMethod("render-bob");
+        else if (method == VS_INTERLACEMETHOD_VAAPI_BOB)
+          m_config.processInfo->SetVideoDeintMethod("vaapi-bob");
+        else if (method == VS_INTERLACEMETHOD_VAAPI_MADI)
+          m_config.processInfo->SetVideoDeintMethod("vaapi-madi");
+        else if (method == VS_INTERLACEMETHOD_VAAPI_MACI)
+          m_config.processInfo->SetVideoDeintMethod("vaapi-maci");
       }
       else
       {
@@ -2071,6 +2082,7 @@ void COutput::InitCycle()
       {
         m_pp->Init(method);
         m_currentDiMethod = method;
+        m_config.processInfo->SetVideoDeintMethod("none");
       }
       else
       {
@@ -2151,8 +2163,7 @@ void COutput::ReleaseProcessedPicture(CVaapiProcessedPicture &pic)
 
 void COutput::DropVppProcessedPictures()
 {
-  std::deque<CVaapiProcessedPicture>::iterator it;
-  it = m_bufferPool.processedPics.begin();
+  auto it = m_bufferPool.processedPics.begin();
   while (it != m_bufferPool.processedPics.end())
   {
     if (it->source == CVaapiProcessedPicture::VPP_SRC)
@@ -2196,9 +2207,9 @@ void COutput::QueueReturnPicture(CVaapiRenderPicture *pic)
   }
 
   // check if already queued
-  std::deque<int>::iterator it2 = find(m_bufferPool.syncRenderPics.begin(),
-                                       m_bufferPool.syncRenderPics.end(),
-                                       *it);
+  auto it2 = find(m_bufferPool.syncRenderPics.begin(),
+                  m_bufferPool.syncRenderPics.end(),
+                  *it);
   if (it2 == m_bufferPool.syncRenderPics.end())
   {
     m_bufferPool.syncRenderPics.push_back(*it);
@@ -2212,8 +2223,7 @@ bool COutput::ProcessSyncPicture()
   CVaapiRenderPicture *pic;
   bool busy = false;
 
-  std::deque<int>::iterator it;
-  for (it = m_bufferPool.syncRenderPics.begin(); it != m_bufferPool.syncRenderPics.end(); )
+  for (auto it = m_bufferPool.syncRenderPics.begin(); it != m_bufferPool.syncRenderPics.end(); )
   {
     pic = m_bufferPool.allRenderPics[*it];
 
@@ -2242,9 +2252,9 @@ bool COutput::ProcessSyncPicture()
 
     m_bufferPool.freeRenderPics.push_back(*it);
 
-    std::deque<int>::iterator it2 = find(m_bufferPool.usedRenderPics.begin(),
-                                         m_bufferPool.usedRenderPics.end(),
-                                         *it);
+    auto it2 = find(m_bufferPool.usedRenderPics.begin(),
+                    m_bufferPool.usedRenderPics.end(),
+                    *it);
     if (it2 == m_bufferPool.usedRenderPics.end())
     {
       CLog::Log(LOGERROR, "COutput::ProcessSyncPicture - pic not found in queue");
@@ -2280,8 +2290,7 @@ void COutput::ProcessReturnPicture(CVaapiRenderPicture *pic)
 
 void COutput::ProcessReturnProcPicture(int id)
 {
-  std::deque<CVaapiProcessedPicture>::iterator it;
-  for (it=m_bufferPool.processedPicsAway.begin(); it!=m_bufferPool.processedPicsAway.end(); ++it)
+  for (auto it=m_bufferPool.processedPicsAway.begin(); it!=m_bufferPool.processedPicsAway.end(); ++it)
   {
     if (it->id == id)
     {
@@ -2809,12 +2818,11 @@ bool CVppPostproc::Filter(CVaapiProcessedPicture &outPic)
     return false;
   }
 
-  std::deque<CVaapiDecodedPicture>::iterator it;
-  for (it=m_decodedPics.begin(); it!=m_decodedPics.end(); ++it)
-  {
-    if (it->index == m_currentIdx)
-      break;
-  }
+  const auto currentIdx = m_currentIdx;
+  auto it = std::find_if(m_decodedPics.begin(), m_decodedPics.end(),
+                         [currentIdx](const CVaapiDecodedPicture &picture){
+                           return picture.index == currentIdx;
+                         });
   if (it==m_decodedPics.end())
   {
     return false;
@@ -2917,26 +2925,26 @@ bool CVppPostproc::Filter(CVaapiProcessedPicture &outPic)
   double pts = DVD_NOPTS_VALUE;
 
   pipelineParams->surface = VA_INVALID_SURFACE;
-  for (it=m_decodedPics.begin(); it!=m_decodedPics.end(); ++it)
+  for (const auto &picture : m_decodedPics)
   {
-    if (it->index >= minPic && it->index <= maxPic)
+    if (picture.index >= minPic && picture.index <= maxPic)
     {
-      if (it->index > curPic)
+      if (picture.index > curPic)
       {
-        backwardRefs[(it->index - curPic) - 1] = it->videoSurface;
+        backwardRefs[(picture.index - curPic) - 1] = picture.videoSurface;
         pipelineParams->num_backward_references++;
       }
-      else if (it->index == curPic)
+      else if (picture.index == curPic)
       {
-        pipelineParams->surface = it->videoSurface;
-        pts = it->DVDPic.pts;
+        pipelineParams->surface = picture.videoSurface;
+        pts = picture.DVDPic.pts;
       }
-      if (it->index < curPic)
+      if (picture.index < curPic)
       {
-        forwardRefs[(curPic - it->index) - 1] = it->videoSurface;
+        forwardRefs[(curPic - picture.index) - 1] = picture.videoSurface;
         pipelineParams->num_forward_references++;
-        if (it->index == curPic - 1)
-          ptsLast = it->DVDPic.pts;
+        if (picture.index == curPic - 1)
+          ptsLast = picture.DVDPic.pts;
       }
     }
   }
@@ -2985,8 +2993,7 @@ void CVppPostproc::Advance()
   m_currentIdx++;
 
   // release all unneeded refs
-  std::deque<CVaapiDecodedPicture>::iterator it;
-  it = m_decodedPics.begin();
+  auto it = m_decodedPics.begin();
   while (it != m_decodedPics.end())
   {
     if (it->index < m_currentIdx - m_forwardRefs)
@@ -3007,8 +3014,7 @@ void CVppPostproc::ClearRef(VASurfaceID surf)
 void CVppPostproc::Flush()
 {
   // release all decoded pictures
-  std::deque<CVaapiDecodedPicture>::iterator it;
-  it = m_decodedPics.begin();
+  auto it = m_decodedPics.begin();
   while (it != m_decodedPics.end())
   {
     m_config.videoSurfaces->ClearRender(it->videoSurface);

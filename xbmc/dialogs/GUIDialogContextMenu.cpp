@@ -42,10 +42,10 @@
 #include "filesystem/File.h"
 #include "guilib/LocalizeStrings.h"
 #include "TextureCache.h"
-#include "video/windows/GUIWindowVideoBase.h"
 #include "URL.h"
 #include "utils/StringUtils.h"
 #include "utils/Variant.h"
+#include "addons/Scraper.h"
 
 #define BACKGROUND_IMAGE       999
 #define GROUP_LIST             996
@@ -88,7 +88,7 @@ bool CGUIDialogContextMenu::OnMessage(CGUIMessage &message)
   if (message.GetMessage() == GUI_MSG_CLICKED)
   { // someone has been clicked - deinit...
     if (message.GetSenderId() >= BUTTON_START && message.GetSenderId() <= BUTTON_END)
-      m_clickedButton = (int)m_buttons[message.GetSenderId() - BUTTON_START].first;
+      m_clickedButton = message.GetSenderId() - BUTTON_START;
     Close();
     return true;
   }
@@ -208,7 +208,7 @@ float CGUIDialogContextMenu::GetWidth() const
 
 bool CGUIDialogContextMenu::SourcesMenu(const std::string &strType, const CFileItemPtr& item, float posX, float posY)
 {
-  // TODO: This should be callable even if we don't have any valid items
+  //! @todo This should be callable even if we don't have any valid items
   if (!item)
     return false;
 
@@ -229,11 +229,6 @@ void CGUIDialogContextMenu::GetContextButtons(const std::string &type, const CFi
   {
     if (item->IsDVD() || item->IsCDDA())
     {
-      // We need to check if there is a detected is inserted!
-      buttons.Add(CONTEXT_BUTTON_PLAY_DISC, 341); // Play CD/DVD!
-      if (CGUIWindowVideoBase::HasResumeItemOffset(item.get()))
-        buttons.Add(CONTEXT_BUTTON_RESUME_DISC, CGUIWindowVideoBase::GetResumeString(*(item.get())));     // Resume Disc
-
       buttons.Add(CONTEXT_BUTTON_EJECT_DISC, 13391);  // Eject/Load CD/DVD!
     }
     else // Must be HDD
@@ -251,20 +246,13 @@ void CGUIDialogContextMenu::GetContextButtons(const std::string &type, const CFi
     if (share)
     {
       // Note. from now on, remove source & disable plugin should mean the same thing
-      //TODO might be smart to also combine editing source & plugin settings into one concept/dialog
+      //! @todo might be smart to also combine editing source & plugin settings into one concept/dialog
       // Note. Temporarily disabled ability to remove plugin sources until installer is operational
 
       CURL url(share->strPath);
       bool isAddon = ADDON::TranslateContent(url.GetProtocol()) != CONTENT_NONE;
       if (!share->m_ignore && !isAddon)
         buttons.Add(CONTEXT_BUTTON_EDIT_SOURCE, 1027); // Edit Source
-      else
-      {
-        ADDON::AddonPtr plugin;
-        if (ADDON::CAddonMgr::GetInstance().GetAddon(url.GetHostName(), plugin))
-        if (plugin->HasSettings())
-          buttons.Add(CONTEXT_BUTTON_PLUGIN_SETTINGS, 1045); // Plugin Settings
-      }
       if (type != "video")
         buttons.Add(CONTEXT_BUTTON_SET_DEFAULT, 13335); // Set as Default
       if (!share->m_ignore && !isAddon)
@@ -301,20 +289,6 @@ void CGUIDialogContextMenu::GetContextButtons(const std::string &type, const CFi
 
 bool CGUIDialogContextMenu::OnContextButton(const std::string &type, const CFileItemPtr& item, CONTEXT_BUTTON button)
 {
-  // Add Source doesn't require a valid share
-  if (button == CONTEXT_BUTTON_ADD_SOURCE)
-  {
-    if (CProfilesManager::GetInstance().IsMasterProfile())
-    {
-      if (!g_passwordManager.IsMasterLockUnlocked(true))
-        return false;
-    }
-    else if (!CProfilesManager::GetInstance().GetCurrentProfile().canWriteSources() && !g_passwordManager.IsProfileLockUnlocked())
-      return false;
-
-    return CGUIDialogMediaSource::ShowAndAddMediaSource(type);
-  }
-
   // buttons that are available on both sources and autosourced items
   if (!item) return false;
 
@@ -324,12 +298,6 @@ bool CGUIDialogContextMenu::OnContextButton(const std::string &type, const CFile
     return g_mediaManager.Eject(item->GetPath());
 
 #ifdef HAS_DVD_DRIVE
-  case CONTEXT_BUTTON_PLAY_DISC:
-    return MEDIA_DETECT::CAutorun::PlayDisc(item->GetPath(), true, true); // restart
-
-  case CONTEXT_BUTTON_RESUME_DISC:
-    return MEDIA_DETECT::CAutorun::PlayDisc(item->GetPath(), true, false); // resume
-
   case CONTEXT_BUTTON_EJECT_DISC:
     g_mediaManager.ToggleTray(g_mediaManager.TranslateDevicePath(item->GetPath())[0]);
 #endif
@@ -653,9 +621,9 @@ void CGUIDialogContextMenu::SwitchMedia(const std::string& strType, const std::s
   // create menu
   CContextButtons choices;
   if (strType != "music")
-    choices.Add(WINDOW_MUSIC_FILES, 2);
+    choices.Add(WINDOW_MUSIC_NAV, 2);
   if (strType != "video")
-    choices.Add(WINDOW_VIDEO_FILES, 3);
+    choices.Add(WINDOW_VIDEO_NAV, 3);
   if (strType != "pictures")
     choices.Add(WINDOW_PICTURES, 1);
   if (strType != "files")
@@ -667,6 +635,21 @@ void CGUIDialogContextMenu::SwitchMedia(const std::string& strType, const std::s
     CUtil::DeleteDirectoryCache();
     g_windowManager.ChangeActiveWindow(window, strPath);
   }
+}
+
+int CGUIDialogContextMenu::Show(const CContextButtons& choices)
+{
+  auto dialog = static_cast<CGUIDialogContextMenu*>(g_windowManager.GetWindow(WINDOW_DIALOG_CONTEXT_MENU));
+  if (!dialog)
+    return -1;
+
+  dialog->m_buttons = choices;
+  dialog->Initialize();
+  dialog->SetInitialVisibility();
+  dialog->SetupButtons();
+  dialog->PositionAtCurrentFocus();
+  dialog->Open();
+  return dialog->m_clickedButton;
 }
 
 int CGUIDialogContextMenu::ShowAndGetChoice(const CContextButtons &choices)
@@ -683,7 +666,10 @@ int CGUIDialogContextMenu::ShowAndGetChoice(const CContextButtons &choices)
     pMenu->SetupButtons();
     pMenu->PositionAtCurrentFocus();
     pMenu->Open();
-    return pMenu->m_clickedButton;
+
+    int idx = pMenu->m_clickedButton;
+    if (idx != -1)
+      return choices[idx].first;
   }
   return -1;
 }

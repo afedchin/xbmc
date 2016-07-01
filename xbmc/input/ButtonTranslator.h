@@ -26,9 +26,7 @@
 #include <map>
 #include <string>
 #include <vector>
-#include <set>
-#include <memory>
-#include "system.h" // for HAS_EVENT_SERVER, HAS_SDL_JOYSTICK
+#include "system.h" // for HAS_EVENT_SERVER
 
 #ifdef HAS_EVENT_SERVER
 #include "network/EventClient.h"
@@ -37,9 +35,7 @@
 class CKey;
 class CAction;
 class TiXmlNode;
-struct AxisConfig;
 class CRegExp;
-typedef std::vector<AxisConfig> AxesConfig; // [<axis, isTrigger, rest state value>]
 
 struct CButtonAction
 {
@@ -99,6 +95,8 @@ public:
    */
   CAction GetGlobalAction(const CKey &key);
 
+  static bool IsAnalog(int actionID);
+
   /*! \brief Translate between a window name and it's id
    \param window name of the window
    \return id of the window, or WINDOW_INVALID if not found
@@ -114,13 +112,8 @@ public:
   static bool TranslateActionString(const char *szAction, int &action);
 
   int TranslateLircRemoteString(const char* szDevice, const char *szButton);
-#if defined(HAS_SDL_JOYSTICK) || defined(HAS_EVENT_SERVER)
-  bool TranslateJoystickString(int window, const std::string& szDevice, int id,
-                               short inputType, int& action, std::string& strAction,
-                               bool &fullrange);
-
-  const AxesConfig* GetAxesConfigFor(const std::string& joyName) const;
-#endif
+  
+  bool TranslateCustomControllerString(int windowId, const std::string& controllerName, int buttonId, int& action, std::string& strAction);
 
   bool TranslateTouchAction(int window, int touchAction, int touchPointers, int &action, std::string &actionString);
 
@@ -134,19 +127,12 @@ private:
 
   int GetActionCode(int window, int action);
   int GetActionCode(int window, const CKey &key, std::string &strAction) const;
-#if defined(HAS_SDL_JOYSTICK) || defined(HAS_EVENT_SERVER)
-  typedef std::set<std::shared_ptr<CRegExp> > JoystickFamily;
-  typedef std::map<std::string, JoystickFamily> JoystickFamilyMap;
-  typedef std::map<int, std::string> ActionMap; // <button/axis, action>
-  typedef std::map<int, ActionMap > WindowMap; // <window, actionMap>
-  typedef std::map<std::string, WindowMap> JoystickMap; // <family name, windowMap>
-  int GetActionCode(int window, int id, const WindowMap &wmap, std::string &strAction, bool &fullrange) const;
-#endif
   int GetFallbackWindow(int windowID);
 
   static uint32_t TranslateGamepadString(const char *szButton);
   static uint32_t TranslateRemoteString(const char *szButton);
   static uint32_t TranslateUniversalRemoteString(const char *szButton);
+  static uint32_t TranslateJoystickString(const char *szButton);
 
   static uint32_t TranslateKeyboardString(const char *szButton);
   static uint32_t TranslateKeyboardButton(TiXmlElement *pButton);
@@ -157,6 +143,7 @@ private:
 
   void MapWindowActions(TiXmlNode *pWindow, int wWindowID);
   void MapAction(uint32_t buttonCode, const char *szAction, buttonMap &map);
+  void MapCustomControllerActions(int windowID, TiXmlNode *pCustomController);
 
   bool LoadKeymap(const std::string &keymapPath);
   bool LoadLircMap(const std::string &lircmapPath);
@@ -167,21 +154,15 @@ private:
   typedef std::map<std::string, std::string> lircButtonMap;
   std::map<std::string, lircButtonMap*> lircRemotesMap;
 
-#if defined(HAS_SDL_JOYSTICK) || defined(HAS_EVENT_SERVER)
-  void MapJoystickFamily(TiXmlNode *pFamily);
-  void MapJoystickActions(int windowID, TiXmlNode *pJoystick);
-  std::string JoynameToRegex(const std::string& joyName) const;
-  bool AddFamilyRegex(JoystickFamily* family, std::shared_ptr<CRegExp> regex);
-  void MergeMap(std::shared_ptr<CRegExp> joyName, JoystickMap *joystick, int windowID, const ActionMap &actionMap);
-  JoystickMap::const_iterator FindWindowMap(const std::string& joyName, const JoystickMap &maps) const;
-  JoystickFamilyMap::const_iterator FindJoystickFamily(const std::string& joyName) const;
-  JoystickFamilyMap m_joystickFamilies;
-  JoystickMap m_joystickButtonMap;                           // <joy family, button map>
-  JoystickMap m_joystickAxisMap;                             // <joy family, axis map>
-  JoystickMap m_joystickHatMap;                              // <joy family, hat map>
-  std::map<std::string, AxesConfig> m_joystickAxesConfigs;   // <joy family, axes config>
-#endif
+  // maps button id to action
+  typedef std::map<int, std::string> CustomControllerButtonMap;
+  // maps window id to controller button map
+  typedef std::map<int, CustomControllerButtonMap> CustomControllerWindowMap;
+  // maps custom controller name to controller Window map
+  std::map<std::string, CustomControllerWindowMap> m_customControllersMap;
+  int GetCustomControllerActionCode(int windowId, int buttonId, const CustomControllerWindowMap *windowMap, std::string& strAction) const;
 
+  
   void MapTouchActions(int windowID, TiXmlNode *pTouch);
   static uint32_t TranslateTouchCommand(TiXmlElement *pButton, CButtonAction &action);
   int GetTouchActionCode(int window, int action, std::string &actionString);

@@ -25,6 +25,7 @@
 #include "windowing/WindowingFactory.h"
 #include "guilib/GraphicContext.h"
 #include "guilib/TextureManager.h"
+#include "cores/VideoPlayer/Process/ProcessInfo.h"
 #include "cores/VideoPlayer/VideoRenderers/RenderManager.h"
 #include "DVDVideoCodecFFmpeg.h"
 #include "DVDClock.h"
@@ -44,16 +45,6 @@ using namespace VDPAU;
 #define NUM_CROP_PIX 3
 
 #define ARSIZE(x) (sizeof(x) / sizeof((x)[0]))
-
-// settings codecs mapping
-DVDCodecAvailableType g_vdpau_available[] = {
-  { AV_CODEC_ID_H263, CSettings::SETTING_VIDEOPLAYER_USEVDPAUMPEG4.c_str() },
-  { AV_CODEC_ID_MPEG4, CSettings::SETTING_VIDEOPLAYER_USEVDPAUMPEG4.c_str() },
-  { AV_CODEC_ID_WMV3, CSettings::SETTING_VIDEOPLAYER_USEVDPAUVC1.c_str() },
-  { AV_CODEC_ID_VC1, CSettings::SETTING_VIDEOPLAYER_USEVDPAUVC1.c_str() },
-  { AV_CODEC_ID_MPEG2VIDEO, CSettings::SETTING_VIDEOPLAYER_USEVDPAUMPEG2.c_str() },
-};
-const size_t settings_count = sizeof(g_vdpau_available) / sizeof(DVDCodecAvailableType);
 
 CDecoder::Desc decoder_profiles[] = {
 {"MPEG1",        VDP_DECODER_PROFILE_MPEG1},
@@ -477,13 +468,14 @@ int CVideoSurfaces::Size()
 // CVDPAU
 //-----------------------------------------------------------------------------
 
-CDecoder::CDecoder() : m_vdpauOutput(&m_inMsgEvent)
+CDecoder::CDecoder(CProcessInfo& processInfo) : m_vdpauOutput(&m_inMsgEvent), m_processInfo(processInfo)
 {
   m_vdpauConfig.videoSurfaces = &m_videoSurfaces;
 
   m_vdpauConfigured = false;
   m_DisplayState = VDPAU_OPEN;
   m_vdpauConfig.context = 0;
+  m_vdpauConfig.processInfo = &m_processInfo;
 }
 
 bool CDecoder::Open(AVCodecContext* avctx, AVCodecContext* mainctx, const enum AVPixelFormat fmt, unsigned int surfaces)
@@ -494,7 +486,14 @@ bool CDecoder::Open(AVCodecContext* avctx, AVCodecContext* mainctx, const enum A
   // nvidia is whitelisted despite for mpeg-4 we need to query user settings
   if ((gpuvendor.compare(0, 6, "nvidia") != 0)  || (avctx->codec_id == AV_CODEC_ID_MPEG4) || (avctx->codec_id == AV_CODEC_ID_H263))
   {
-    if (CDVDVideoCodec::IsCodecDisabled(g_vdpau_available, settings_count, avctx->codec_id))
+    std::map<AVCodecID, std::string> settings_map = {
+      { AV_CODEC_ID_H263, CSettings::SETTING_VIDEOPLAYER_USEVDPAUMPEG4 },
+      { AV_CODEC_ID_MPEG4, CSettings::SETTING_VIDEOPLAYER_USEVDPAUMPEG4 },
+      { AV_CODEC_ID_WMV3, CSettings::SETTING_VIDEOPLAYER_USEVDPAUVC1 },
+      { AV_CODEC_ID_VC1, CSettings::SETTING_VIDEOPLAYER_USEVDPAUVC1 },
+      { AV_CODEC_ID_MPEG2VIDEO, CSettings::SETTING_VIDEOPLAYER_USEVDPAUMPEG2 },
+    };
+    if (CDVDVideoCodec::IsCodecDisabled(settings_map, avctx->codec_id))
       return false;
   }
 
@@ -1474,7 +1473,20 @@ void CMixer::StateMachine(int signal, Protocol *port, Message *msg)
       break;
 
     case M_TOP_CONFIGURED:
-      if (port == &m_dataPort)
+      if (port == &m_controlPort)
+      {
+        switch (signal)
+        {
+        case CMixerControlProtocol::FLUSH:
+          Flush();
+          msg->Reply(CMixerControlProtocol::ACC);
+          m_state = M_TOP_CONFIGURED_WAIT1;
+          return;
+        default:
+          break;
+        }
+      }
+      else if (port == &m_dataPort)
       {
         switch (signal)
         {
@@ -2450,7 +2462,7 @@ void CMixer::FiniCycle()
   // Keep video surfaces for one 2 cycles longer than used
   // by mixer. This avoids blocking in decoder.
   // NVidia recommends num_ref + 5
-  int surfToKeep = 5;
+  size_t surfToKeep = 5;
 
   if (m_mixerInput.size() > 0 &&
       (m_mixerInput[0].videoSurface == VDP_INVALID_HANDLE))

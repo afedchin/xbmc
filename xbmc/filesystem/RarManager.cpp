@@ -40,20 +40,19 @@
 
 #include <set>
 
+#ifdef TARGET_POSIX
+#include "linux/XFileUtils.h"
+#endif
+
 #define EXTRACTION_WARN_SIZE 50*1024*1024
 
 using namespace XFILE;
 
 CFileInfo::CFileInfo()
-{
-  m_strCachedPath.clear();
-  m_bAutoDel = true;
-  m_iUsed = 0;
-  m_iIsSeekable = -1;
-  m_iOffset = 0;
-}
-
-CFileInfo::~CFileInfo()
+  : m_bAutoDel{true}
+  , m_iUsed{0}
+  , m_iOffset{0}
+  , m_iIsSeekable{-1}
 {
 }
 
@@ -206,8 +205,10 @@ bool CRarManager::CacheRarredFile(std::string& strPathInCache, const std::string
   StringUtils::Replace(strPath, '/', '\\');
 #endif
   //g_charsetConverter.unknownToUTF8(strPath);
-  std::string strCachedPath = URIUtils::AddFileToFolder(strDir + "rarfolder%04d",
-                                           URIUtils::GetFileName(strPathInRar));
+  std::string strCachedPath = URIUtils::AddFileToFolder(
+                               URIUtils::AddFileToFolder(
+                                 CSpecialProtocol::TranslatePath(strDir), "rarfolder%04d"),
+                                 URIUtils::GetFileName(strPathInRar));
   strCachedPath = CUtil::GetNextPathname(strCachedPath, 9999);
   if (strCachedPath.empty())
   {

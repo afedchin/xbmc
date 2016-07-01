@@ -37,6 +37,7 @@
 #include "FileItem.h"
 #include "Application.h"
 #include "messaging/ApplicationMessenger.h"
+#include "PlayListPlayer.h"
 #include "utils/md5.h"
 #include "utils/Variant.h"
 #include "settings/Settings.h"
@@ -465,6 +466,7 @@ CAirPlayServer::CTCPClient::CTCPClient()
 }
 
 CAirPlayServer::CTCPClient::CTCPClient(const CTCPClient& client)
+: m_lastEvent(EVENT_NONE)
 {
   Copy(client);
   m_httpParser = new HttpParser();

@@ -64,7 +64,7 @@
 #define SETTING_VIDEO_STREAM              "video.stream"
 
 CGUIDialogVideoSettings::CGUIDialogVideoSettings()
-    : CGUIDialogSettingsManualBase(WINDOW_DIALOG_VIDEO_OSD_SETTINGS, "VideoOSDSettings.xml"),
+    : CGUIDialogSettingsManualBase(WINDOW_DIALOG_VIDEO_OSD_SETTINGS, "DialogSettings.xml"),
       m_viewModeChanged(false)
 { }
 
@@ -170,7 +170,7 @@ void CGUIDialogVideoSettings::OnSettingAction(const CSetting *setting)
       return;
     g_windowManager.ForceActivateWindow(WINDOW_SCREEN_CALIBRATION);
   }
-  // TODO
+  //! @todo implement
   else if (settingId == SETTING_VIDEO_MAKE_DEFAULT)
     Save();
 }
@@ -202,6 +202,9 @@ void CGUIDialogVideoSettings::SetupView()
   CGUIDialogSettingsManualBase::SetupView();
 
   SetHeading(13395);
+  SET_CONTROL_HIDDEN(CONTROL_SETTINGS_OKAY_BUTTON);
+  SET_CONTROL_HIDDEN(CONTROL_SETTINGS_CUSTOM_BUTTON);
+  SET_CONTROL_LABEL(CONTROL_SETTINGS_CANCEL_BUTTON, 15067);
 }
 
 void CGUIDialogVideoSettings::InitializeSettings()

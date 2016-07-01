@@ -52,6 +52,7 @@ using namespace XFILE;
 CGUIDialogSongInfo::CGUIDialogSongInfo(void)
     : CGUIDialog(WINDOW_DIALOG_SONG_INFO, "DialogMusicInfo.xml")
     , m_song(new CFileItem)
+    , m_albumId(-1)
 {
   m_cancelled = false;
   m_needsUpdate = false;
@@ -234,7 +235,7 @@ CFileItemPtr CGUIDialogSongInfo::GetCurrentListItem(int offset)
 
 bool CGUIDialogSongInfo::DownloadThumbnail(const std::string &thumbFile)
 {
-  // TODO: Obtain the source...
+  //! @todo Obtain the source...
   std::string source;
   CCurlFile http;
   http.Download(source, thumbFile);
@@ -248,8 +249,8 @@ bool CGUIDialogSongInfo::DownloadThumbnail(const std::string &thumbFile)
 // 3.  Local thumb
 // 4.  No thumb (if no Local thumb is available)
 
-// TODO: Currently no support for "embedded thumb" as there is no easy way to grab it
-//       without sending a file that has this as it's album to this class
+//! @todo Currently no support for "embedded thumb" as there is no easy way to grab it
+//!       without sending a file that has this as it's album to this class
 void CGUIDialogSongInfo::OnGetThumb()
 {
   CFileItemList items;

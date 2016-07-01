@@ -152,7 +152,6 @@ void CURL::Parse(const std::string& strURL1)
     IsProtocol("stack") ||
     IsProtocol("virtualpath") ||
     IsProtocol("multipath") ||
-    IsProtocol("filereader") ||
     IsProtocol("special") ||
     IsProtocol("resource")
     )
@@ -180,7 +179,7 @@ void CURL::Parse(const std::string& strURL1)
   size_t iEnd = strURL.length();
   const char* sep = NULL;
 
-  //TODO fix all Addon paths
+  //! @todo fix all Addon paths
   std::string strProtocol2 = GetTranslatedProtocol();
   if(IsProtocol("rss") ||
      IsProtocol("rar") ||
@@ -738,7 +737,7 @@ bool CURL::IsFullPath(const std::string &url)
   if (url.size() && url[0] == '/') return true;     //   /foo/bar.ext
   if (url.find("://") != std::string::npos) return true;                 //   foo://bar.ext
   if (url.size() > 1 && url[1] == ':') return true; //   c:\\foo\\bar\\bar.ext
-  if (URIUtils::PathStarts(url, "\\\\")) return true;    //   \\UNC\path\to\file
+  if (StringUtils::StartsWith(url, "\\\\")) return true;    //   \\UNC\path\to\file
   return false;
 }
 
@@ -792,7 +791,7 @@ std::string CURL::Encode(const std::string& strURLData)
     const char kar = strURLData[i];
     
     // Don't URL encode "-_.!()" according to RFC1738
-    // TODO: Update it to "-_.~" after Gotham according to RFC3986
+    //! @todo Update it to "-_.~" after Gotham according to RFC3986
     if (StringUtils::isasciialphanum(kar) || kar == '-' || kar == '.' || kar == '_' || kar == '!' || kar == '(' || kar == ')')
       strResult.push_back(kar);
     else

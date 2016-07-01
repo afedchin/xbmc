@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <addon id="repository.xbmc.org"
 		name="Kodi Add-on repository"
-		version="2.5.0"
+		version="2.5.4"
 		provider-name="Team Kodi">
   <requires>
     <import addon="xbmc.addon" version="12.0.0"/>
   </requires>
 	<extension point="xbmc.addon.repository"
 		name="Official XBMC.org Add-on Repository">
-		<dir minversion="15.9.0">
+		<dir minversion="16.9.0">
 			<info>http://mirrors.kodi.tv/addons/krypton/addons.xml.gz</info>
 			<checksum>http://mirrors.kodi.tv/addons/krypton/addons.xml.gz.md5</checksum>
 			<datadir zip="true">http://mirrors.kodi.tv/addons/krypton</datadir>
@@ -36,7 +36,7 @@
 		<summary lang="es_MX">Installar Add-ons de Kodi.tv</summary>
 		<summary lang="et_EE">Paigalda lisasid lehelt Kodi.tv</summary>
 		<summary lang="eu_ES">Instalatu Kodi.tv-eko gehigarriak</summary>
-		<summary lang="fa_IR">نصب افزونه ها از سایت Kodi.tv</summary>
+		<summary lang="fa_IR">‫نصف افزونه‌ها از Kodi.tv</summary>
 		<summary lang="fi_FI">Asenna lisäosia Kodi.tv -sivustolta</summary>
 		<summary lang="fr_CA">Installer des addiciels depuis Kodi.tv</summary>
 		<summary lang="fr_FR">Installer des extensions depuis Kodi.tv</summary>
@@ -64,7 +64,7 @@
 		<summary lang="ru_RU">Установить дополнения с сайта Kodi.tv</summary>
 		<summary lang="sk_SK">Inštalovať rozšírenia z Kodi.tv</summary>
 		<summary lang="sl_SI">Namestite dodatke s Kodi.tv</summary>
-		<summary lang="sr_RS">Инсталирај додатке са Kodi.tv</summary>
+		<summary lang="sr_RS">Инсталирај додатне програме са Kodi.tv</summary>
 		<summary lang="sr_RS@latin">Instaliraj dodatne programe sa Kodi.tv</summary>
 		<summary lang="sv_SE">Installera tillägg från Kodi.tv</summary>
 		<summary lang="tg_TJ">Насб кардани барномаҳои иловагӣ аз Kodi.tv</summary>
@@ -95,7 +95,7 @@
 		<description lang="eu_ES">Gehigarriak Kodi.tv biltegi ofizialetik deskargatu eta instalatu.[CR]  &#10;Biltegi ofiziala erabiliaz zutaz gertu dagoen gune batetik deskargatu&#10;ditzakezu gure fitxategi-ispilu multzoaren abantailaz aprobetxatuaz.[CR]  &#10;Biltegi honetako gehigarri guztiek proba basikoak gainditu dituzte baina hondaturiko edo funtzionatzen ez duen gehigarri baten bat aurki ezkero honen berri Kodi taldeari eman beharrezko ekintzak burutu ditzagun.</description>
 		<description lang="fa_IR">افزودنی ها را از منبع رسمی افزونه ها در Kodi.tv دانلود و نصب کنید. [CR] با استفاده از منبع رسمی شما قادر خواهید بود از خدمات گسترده سرویس دانلود جایگزین ما بهره ببرید که امکان دانلود از مناطق نزدیکتر را در اختیار شما قرار می دهد. [CR] همه افزونه های این منبع آزمایش های اولیه را پشت سر گذاشته اند. در صورت یافتن افزونه معیوب یا غیر قابل استفاده لطفا آن را به تیم کودی گزارش کنید تا اقدامات لازم را انجام دهیم.</description>
 		<description lang="fi_FI">Lataa ja asenna lisäosia virallisesta Kodi.tv -lisäosasäilöstä.[CR]  Käyttämällä virallista säilöä sinun on mahdollista käyttää hyväksesi meidän kattavaa tiedostojen peilauspalveluamme saavuttaaksesi korkeat latausnopeudet sinun lähialueeltasi.[CR]  Kaikki tämän säilön lisäosat on testattu toimiviksi, jos löydät rikkinäisen tai "ei toimivan" lisäosan, ilmoita siitä Team Kodi:lle, jotta voimme korjata asian.</description>
-		<description lang="fr_CA">Télécharger et installer des addiciels depuis le dépôt officiel de Kodi.tv.[CR] En utilisant le dépôt officiel vous pourrez bénéficier de notre service étendu de miroirs de fichiers favorisant des téléchargements plus rapides depuis une région proche de vous.[CR] Tous les addiciels de ce dépôt ont subi des tests de base. Si vous trouvez un addiciel non fonctionnel ou brisé, veuillez le rapporter à l'équipe-Kodi afin que nous puissions agir.</description>
+		<description lang="fr_CA">Télécharger et installer des addiciels depuis le dépôt officiel de Kodi.tv.[CR] En utilisant le dépôt officiel vous pourrez bénéficier de notre service étendu de miroirs de fichiers favorisant des téléchargements plus rapides depuis une région proche de vous.[CR] Tous les addiciels de ce dépôt ont subi des tests de base. Si vous trouvez un addiciel non fonctionnel ou brisé, veuillez le rapporter à l'équipe Kodi afin que nous puissions agir.</description>
 		<description lang="fr_FR">Télécharger et installer des extensions à partir du dépôt officiel Kodi.tv.[CR]En utilisant le dépôt officiel, vous bénéficierez de notre service de serveurs miroirs permettant de télécharger rapidement depuis une région proche de chez vous.[CR]Toutes les extensions de ce dépôt ont été testées sommairement, si vous trouvez une extension corrompue ou inutilisable, veuillez en informer l'Équipe Kodi afin que nous puissions prendre les mesures nécessaires.</description>
 		<description lang="gl_ES">Descargar e instalar Engadidos dende o repositorio oficial de Kodi.tv.[CR] Empregando o repositorio oficial, vostede poderá gozar das vantaxes do seu extenso servizo de replicación de ficheiros que lle permite unhas descargas máis rápidas dende unha rexión preto a vostede.[CR] Tódolos Engadidos deste repositorio pasaron por comprobacións básicas. Se atopa algún Engadido roto ou non funcional, por favor reporteo ó equipo de Kodi para que poidan actuar en consecuencia.</description>
 		<description lang="he_IL">הורדה והתקנת הרחבות ממאגר הרחבות Kodi.tv הרשמי.[CR] שימוש במאגר הרשמי מאפשר לנצל את שירות שיקוף הקבצים של Kodi.tv העוזר להוריד מהר יותר מהשרת הקרוב ביותר.[CR] כל ההרחבות במאגר זה עברו בדיקה בסיסית. יש לדווח לצוות הפיתוח של Kodi על כל הרחבה שנמצאה כלא תקינה או שלא עובדת ע"מ שתתבצע הפעולה המתאימה.</description>
@@ -115,7 +115,7 @@
 		<description lang="nl_NL">Download en installeer add-ons uit de officiële Kodi.tv add-on depot.[CR] Wanneer u de officiële depot gebruikt beschikt u over onze uitgebreide mirrorservice, waardoor u snel kan downloaden van locaties in uw buurt.[CR] Alle add-ons in dit depot ondergingen standaardtests; indien u een defecte of niet-werkende add-on vindt, meld dit dan aan Team Kodi zodat zij actie kunnen ondernemen.</description>
 		<description lang="pl_PL">Pobieraj i instaluj dodatki z oficjalnego repozytorium Kodi.tv.[CR] Używając oficjalnego repozytorium korzystasz z serwerów lustrzanych, rozsianych po całym świecie. Wybierany jest ten, który znajduje się najbliżej ciebie, zapewniając dużą prędkość połączenia.[CR]Wszystkie dodatki znajdujące się w tym repozytorium są testowane, ale mogą okazać się niesprawne. Zgłoś wówczas błąd, aby zespół Kodi mógł podjąć odpowiednie działanie.</description>
 		<description lang="pt_BR">Transfira e instale add-ons a partir do repositório oficial do Kodi.tv.[CR]|Ao utilizar o repositório oficial, você será capaz de tirar proveito do nosso serviço de espelhamento de arquivos, auxiliando em downloads mais rápidos a partir de uma região perto de você.[CR]|Todos os add-ons neste repositório passam por testes básicos, se você encontrar algum quebrado ou que não esteja funcionando, por favor reporte para a equipe do Kodi, para que possamos tomar as ações necessárias.</description>
-		<description lang="pt_PT">Transferir e instalar os add-ons do repositório de add-ons Oficiais de Kodi.tv.[CR]Ao utilizar o Repositório oficial, irá beneficiar do nosso serviço de servidores de ficheiro para o ajudar a ter transferências mais rápidas a partir da região mais perto de si.[CR]Todos os Add-ons neste repositório foram alvo de testes básicos. Se encontrar um danificado ou que não funciona, por favor, informe a Equipa do Kodi, para que a situação seja resolva.</description>
+		<description lang="pt_PT">Transferir e instalar add-ons a partir do repositório de add-ons oficiais de Kodi.tv.[CR]Ao utilizar o Repositório oficial, irá beneficiar do nosso serviço de servidores de ficheiros para o ajudar a ter transferências mais rápidas da região mais perto de si.[CR]Todos os Add-ons neste repositório foram alvo de testes básicos. Se encontrar um danificado ou que não funciona, por favor, informe Tema Kodi, para que a situação seja resolvida.</description>
 		<description lang="ro_RO">Descărcați și instalați suplimente din depozitul de suplimente Kodi.tv oficial.[CR]  Folosind depozitul (repository) oficial puteți beneficia de serviciul nostru de găzduire distribuită pentru a vă ajuta să descărcați mai repede dintr-o regiune mai apropiată de dumneavoastră.[CR]  Toate suplimentele din acest depozit au trecut testele de bază, în caz că găsiți un supliment defect vă rugăm să îl raportați echipei Kodi pentru a lua măsurile necesare.</description>
 		<description lang="ru_RU">Загружайте и устанавливайте обновления из официального репозитория Kodi.tv[CR]Используя официальный репозиторий, вы сможете воспользоваться преимуществами распределенного хранилища для быстрой загрузки файлов с ближайшего к вам сервера.[CR]Все дополнения в данном репозитории прошли тестирование. Если вы обнаружили нерабочее дополнение, сообщите об этом разработчикам Kodi.</description>
 		<description lang="sk_SK">Stiahnuť a nainštalovať rozšírenia z oficiálneho zdroja rozšírení Kodi.tv.[CR] Použitím oficiálneho zdroja získavate možnosť využiť rozsiahly systém zrkadiel, ktorý Vám umožní rýchlejšie sťahovanie z Vám blízkeho regiónu.[CR] Všetky rozšírenia v tomto zdroji boli podrobené základnému testovaniu. Ak nájdete poškodené alebo nefunkčné rozšírenie, oznámte to prosím týmu Kodi aby mohol podľa potreby zakročiť.</description>
@@ -152,7 +152,7 @@
 		<disclaimer lang="eu_ES">Kodi taldeak ez ditu biltegi honetako gehigarri guztiak sortu eta ez da beren edukien erantzule.</disclaimer>
 		<disclaimer lang="fa_IR">همه افزونه های این منبع محصول کار تیم کودی نیستند و این تیم مسئولیتی در قبال محتوای آنها ندارد.</disclaimer>
 		<disclaimer lang="fi_FI">Team Kodi ei ole tehnyt kaikkia tässä säilössä olevia lisäosia, eikä siten ole vastuullinen kyseisten lisäosien sisällöstä</disclaimer>
-		<disclaimer lang="fr_CA">L'équipe-Kodi n'a pas créé tous les addiciels de ce dépôt et n'est pas responsable de leur contenu</disclaimer>
+		<disclaimer lang="fr_CA">L'équipe Kodi n'a pas créé tous les addiciels de ce dépôt et n'est pas responsable de leur contenu</disclaimer>
 		<disclaimer lang="fr_FR">L'Équipe Kodi n'a pas créé toutes les extensions de ce dépôt et n'est pas responsable de leur contenu.</disclaimer>
 		<disclaimer lang="gl_ES">O equipo de Kodi non creou todos os Engadidos deste repositorio e non é responsábel do seu contido</disclaimer>
 		<disclaimer lang="he_IL">צוות הפיתוח של Kodi לא יצר את כל ההרחבות שבמאגר זה ואיננו אחראי על תוכנן</disclaimer>
@@ -172,7 +172,7 @@
 		<disclaimer lang="nl_NL">Team Kodi heeft niet alle add-ons in deze depot geschreven en is niet verantwoordelijk voor hun inhoud.</disclaimer>
 		<disclaimer lang="pl_PL">Zespół Kodi nie tworzy wszystkich dodatków i nie bierze odpowiedzialności za ich zawartość</disclaimer>
 		<disclaimer lang="pt_BR">O Time do Kodi não produziu todos os add-ons deste repositório, e portanto não é responsável ​​por seu conteúdo</disclaimer>
-		<disclaimer lang="pt_PT">A equipa Kodi não desenvolveu todos os add-ons neste repositório e não é responsável pelo seu conteúdo.</disclaimer>
+		<disclaimer lang="pt_PT">A Team Kodi não desenvolveu todos os add-ons neste repositório, e não é responsável pelo seu conteúdo.</disclaimer>
 		<disclaimer lang="ro_RO">Echipa Kodi nu a creat toate aceste suplimente din acest depozit și nu este responsabilă pentru conținutul lor.</disclaimer>
 		<disclaimer lang="ru_RU">Разработчики Kodi не являются авторами всех дополнений в данном репозитории и не несут ответственность за их содержимое.</disclaimer>
 		<disclaimer lang="sk_SK">Team Kodi nevytvoril všetky rozšírenia v tomto zdroji nie je zodpovedný za ich obsah</disclaimer>

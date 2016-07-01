@@ -23,10 +23,14 @@
  *
  */
 
+#include <string>
+#include <vector>
+
 #include "rendering/gles/RenderSystemGLES.h"
 #include "utils/GlobalsHandling.h"
 #include <EGL/egl.h>
 #include "windowing/WinSystem.h"
+#include "threads/SystemClock.h"
 
 class CEGLWrapper;
 class IDispResource;
@@ -66,7 +70,7 @@ public:
   EGLDisplay    GetEGLDisplay();
   EGLContext    GetEGLContext();
 protected:
-  virtual bool  PresentRenderImpl(const CDirtyRegionList &dirty);
+  virtual void  PresentRenderImpl(bool rendered);
   virtual void  SetVSyncImpl(bool enable);
 
   bool          CreateWindow(RESOLUTION_INFO &res);
@@ -84,6 +88,8 @@ protected:
   std::string           m_extensions;
   CCriticalSection             m_resourceSection;
   std::vector<IDispResource*>  m_resources;
+  bool m_delayDispReset;
+  XbmcThreads::EndTime m_dispResetTimer;
 };
 
 XBMC_GLOBAL_REF(CWinSystemEGL,g_Windowing);

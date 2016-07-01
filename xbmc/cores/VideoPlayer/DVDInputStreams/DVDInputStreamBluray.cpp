@@ -41,6 +41,10 @@
 #include "utils/LangCodeExpander.h"
 #include "filesystem/SpecialProtocol.h"
 
+#ifdef TARGET_POSIX
+#include "linux/XTimeUtils.h"
+#endif
+
 #define LIBBLURAY_BYTESEEK 0
 
 using namespace XFILE;
@@ -74,7 +78,7 @@ int DllLibbluray::file_eof(BD_FILE_H *file)
 
 int64_t DllLibbluray::file_read(BD_FILE_H *file, uint8_t *buf, int64_t size)
 {
-  return static_cast<CFile*>(file->internal)->Read(buf, size); // TODO: fix size cast
+  return static_cast<CFile*>(file->internal)->Read(buf, size); //! @todo fix size cast
 }
 
 int64_t DllLibbluray::file_write(BD_FILE_H *file, const uint8_t *buf, int64_t size)
@@ -183,7 +187,7 @@ void  bluray_overlay_argb_cb(void *this_gen, const struct bd_argb_overlay_s * co
 }
 #endif
 
-CDVDInputStreamBluray::CDVDInputStreamBluray(IVideoPlayer* player, CFileItem& fileitem) :
+CDVDInputStreamBluray::CDVDInputStreamBluray(IVideoPlayer* player, const CFileItem& fileitem) :
   CDVDInputStream(DVDSTREAM_TYPE_BLURAY, fileitem)
 {
   m_title = NULL;
@@ -601,6 +605,7 @@ void CDVDInputStreamBluray::ProcessEvent() {
 
 int CDVDInputStreamBluray::Read(uint8_t* buf, int buf_size)
 {
+  m_dispTimeBeforeRead = (int)(m_dll->bd_tell_time(m_bd) / 90);
   if(m_navmode)
   {
     int result = 0;
@@ -897,10 +902,10 @@ int CDVDInputStreamBluray::GetTotalTime()
 
 int CDVDInputStreamBluray::GetTime()
 {
-  return (int)(m_dll->bd_tell_time(m_bd) / 90);
+  return m_dispTimeBeforeRead;
 }
 
-bool CDVDInputStreamBluray::SeekTime(int ms)
+bool CDVDInputStreamBluray::PosTime(int ms)
 {
   if(m_dll->bd_seek_time(m_bd, ms * 90) < 0)
     return false;

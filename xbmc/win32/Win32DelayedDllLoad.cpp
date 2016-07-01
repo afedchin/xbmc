@@ -18,22 +18,30 @@
  *
  */
 
+/**
+* @todo this is to disable a change coming in update 3
+* We should get rid of this and switch the hooks to const
+* once update 3 is rtm and we know our developers have
+* updated
+*/
+#define DELAYIMP_INSECURE_WRITABLE_HOOKS 1
 #include <DelayImp.h>
 #include "Application.h"
 #include "utils/StringUtils.h"
 
 static const std::string dlls[] = {
   "ssh.dll",
+  "zlib.dll",
   "sqlite3.dll",
   "dnssd.dll",
   "libxslt.dll",
-  "avcodec-56.dll",
-  "avfilter-5.dll",
-  "avformat-56.dll",
-  "avutil-54.dll",
-  "postproc-53.dll",
-  "swresample-1.dll",
-  "swscale-3.dll"
+  "avcodec-57.dll",
+  "avfilter-6.dll",
+  "avformat-57.dll",
+  "avutil-55.dll",
+  "postproc-54.dll",
+  "swresample-2.dll",
+  "swscale-4.dll"
 };
 
 FARPROC WINAPI delayHookNotifyFunc (unsigned dliNotify, PDelayLoadInfo pdli)
@@ -69,5 +77,11 @@ FARPROC WINAPI delayHookFailureFunc (unsigned dliNotify, PDelayLoadInfo pdli)
 }
 
 // assign hook functions
+#if !defined(DELAYIMP_INSECURE_WRITABLE_HOOKS)
+const
+#endif
 PfnDliHook __pfnDliNotifyHook2 = delayHookNotifyFunc;
+#if !defined(DELAYIMP_INSECURE_WRITABLE_HOOKS)
+const
+#endif
 PfnDliHook __pfnDliFailureHook2 = delayHookFailureFunc;

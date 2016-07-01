@@ -40,42 +40,47 @@
 #include "guilib/Geometry.h"
 #include "rendering/RenderSystem.h"
 #include "cores/VideoPlayer/VideoRenderers/BaseRenderer.h"
-
-class CMMALVideo;
+#include "cores/VideoPlayer/DVDResource.h"
 
 // a mmal video frame
-class CMMALVideoBuffer
+class CMMALBuffer : public IDVDResourceCounted<CMMALBuffer>
+{
+public:
+  virtual ~CMMALBuffer() {}
+  MMAL_BUFFER_HEADER_T *mmal_buffer;
+  unsigned int m_width;
+  unsigned int m_height;
+  unsigned int m_aligned_width;
+  unsigned int m_aligned_height;
+  float m_aspect_ratio;
+};
+
+class CMMALVideo;
+class CMMALRenderer;
+class CMMALPool;
+
+// a mmal video frame
+class CMMALVideoBuffer : public CMMALBuffer
 {
 public:
   CMMALVideoBuffer(CMMALVideo *omv);
   virtual ~CMMALVideoBuffer();
-
-  MMAL_BUFFER_HEADER_T *mmal_buffer;
-  int width;
-  int height;
-  float m_aspect_ratio;
-  // reference counting
-  CMMALVideoBuffer* Acquire();
-  long              Release();
   CMMALVideo *m_omv;
-  long m_refs;
-private:
 };
 
 class CMMALVideo : public CDVDVideoCodec
 {
 public:
-  CMMALVideo();
+  CMMALVideo(CProcessInfo &processInfo);
   virtual ~CMMALVideo();
 
   // Required overrides
   virtual bool Open(CDVDStreamInfo &hints, CDVDCodecOptions &options);
-  virtual void Dispose(void);
   virtual int  Decode(uint8_t *pData, int iSize, double dts, double pts);
   virtual void Reset(void);
   virtual bool GetPicture(DVDVideoPicture *pDvdVideoPicture);
   virtual bool ClearPicture(DVDVideoPicture* pDvdVideoPicture);
-  virtual unsigned GetAllowedReferences() { return 3; }
+  virtual unsigned GetAllowedReferences() { return 4; }
   virtual void SetDropState(bool bDrop);
   virtual const char* GetName(void) { return m_pFormatName ? m_pFormatName:"mmal-xxx"; }
   virtual bool GetCodecStats(double &pts, int &droppedPics);
@@ -95,10 +100,13 @@ protected:
   bool CreateDeinterlace(EINTERLACEMETHOD interlace_method);
   bool DestroyDeinterlace();
   void Prime();
+  void Dispose(void);
 
   // Video format
-  int               m_decoded_width;
-  int               m_decoded_height;
+  unsigned int      m_decoded_width;
+  unsigned int      m_decoded_height;
+  unsigned int      m_decoded_aligned_width;
+  unsigned int      m_decoded_aligned_height;
   unsigned int      m_egl_buffer_count;
   bool              m_finished;
   float             m_aspect_ratio;
@@ -124,13 +132,16 @@ protected:
   double            m_decoderPts;
   int               m_speed;
   int               m_codecControlFlags;
+  bool              m_dropState;
+  bool              m_preroll;
 
   CCriticalSection m_sharedSection;
   MMAL_COMPONENT_T *m_dec;
   MMAL_PORT_T *m_dec_input;
   MMAL_PORT_T *m_dec_output;
   MMAL_POOL_T *m_dec_input_pool;
-  MMAL_POOL_T *m_vout_input_pool;
+  CMMALRenderer *m_renderer;
+  std::shared_ptr<CMMALPool> m_pool;
 
   MMAL_ES_FORMAT_T *m_es_format;
   MMAL_COMPONENT_T *m_deint;

@@ -23,15 +23,18 @@
 #include "system.h"
 
 #ifdef HAS_GL
+#include <vector>
+
 #include "system_gl.h"
 
-#include "guilib/FrameBufferObject.h"
+#include "FrameBufferObject.h"
 #include "guilib/Shader.h"
 #include "settings/VideoSettings.h"
 #include "RenderFlags.h"
 #include "RenderFormats.h"
 #include "guilib/GraphicContext.h"
 #include "BaseRenderer.h"
+#include "ColorManager.h"
 
 #include "threads/Event.h"
 
@@ -81,7 +84,6 @@ enum RenderMethod
 {
   RENDER_GLSL=0x01,
   RENDER_ARB=0x02,
-  RENDER_SW=0x04,
   RENDER_VDPAU=0x08,
   RENDER_POT=0x10,
   RENDER_VAAPI=0x20,
@@ -169,11 +171,6 @@ protected:
   void DeleteYUV422PackedTexture(int index);
   bool CreateYUV422PackedTexture(int index);
 
-  bool UploadRGBTexture(int index);
-  void ToRGBFrame(YV12Image* im, unsigned flipIndexPlane, unsigned flipIndexBuf);
-  void ToRGBFields(YV12Image* im, unsigned flipIndexPlaneTop, unsigned flipIndexPlaneBot, unsigned flipIndexBuf);
-  void SetupRGBBuffer();
-
   void CalculateTextureSourceRects(int source, int num_planes);
 
   // renderers
@@ -203,7 +200,7 @@ protected:
   std::vector<ERenderFormat> m_formats;
   bool m_bImageReady;
   GLenum m_textureTarget;
-  unsigned short m_renderMethod;
+  int m_renderMethod;
   RenderQuality m_renderQuality;
   unsigned int m_flipindex; // just a counter to keep track of if a image has been uploaded
   
@@ -284,6 +281,17 @@ protected:
   bool  m_nonLinStretch;
   bool  m_nonLinStretchGui;
   float m_pixelRatio;
+
+  // color management
+  std::unique_ptr<CColorManager> m_ColorManager;
+  GLuint m_tCLUTTex;
+  uint16_t *m_CLUT;
+  int m_CLUTsize;
+  int m_cmsToken;
+  bool m_cmsOn;
+
+  bool LoadCLUT();
+  void DeleteCLUT();
 };
 
 

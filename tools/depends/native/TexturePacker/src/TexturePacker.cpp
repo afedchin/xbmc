@@ -39,25 +39,16 @@
 #include "XBTFWriter.h"
 #include "md5.h"
 #include "cmdlineargs.h"
-#include "squish.h"
 
 #ifdef TARGET_WINDOWS
 #define strncasecmp _strnicmp
 #endif
 
-#ifdef USE_LZO_PACKING
-#ifdef TARGET_WINDOWS
-#include "win32/liblzo/LZO1X.H"
-#else
 #include <lzo/lzo1x.h>
-#endif
-#endif
 
 using namespace std;
 
 #define FLAGS_USE_LZO     1
-#define FLAGS_ALLOW_YCOCG 2
-#define FLAGS_USE_DXT     4
 
 #define DIR_SEPARATOR "/"
 
@@ -146,7 +137,6 @@ void CreateSkeletonHeader(CXBTFWriter& xbtfWriter, std::string fullPath)
 CXBTFFrame appendContent(CXBTFWriter &writer, int width, int height, unsigned char *data, unsigned int size, unsigned int format, bool hasAlpha, unsigned int flags)
 {
   CXBTFFrame frame;
-#ifdef USE_LZO_PACKING
   lzo_uint packedSize = size;
 
   if ((flags & FLAGS_USE_LZO) == FLAGS_USE_LZO)
@@ -181,9 +171,6 @@ CXBTFFrame appendContent(CXBTFWriter &writer, int width, int height, unsigned ch
     }
   }
   else
-#else
-  unsigned int packedSize = size;
-#endif
   {
     writer.AppendContent(data, size);
   }
@@ -194,12 +181,6 @@ CXBTFFrame appendContent(CXBTFWriter &writer, int width, int height, unsigned ch
   frame.SetFormat(hasAlpha ? format : format | XB_FMT_OPAQUE);
   frame.SetDuration(0);
   return frame;
-}
-
-void CompressImage(const squish::u8 *brga, int width, int height, squish::u8 *compressed, unsigned int flags, double &colorMSE, double &alphaMSE)
-{
-  squish::CompressImage(brga, width, height, compressed, flags | squish::kSourceBGRA);
-  squish::ComputeMSE(brga, width, height, compressed, flags | squish::kSourceBGRA, colorMSE, alphaMSE);
 }
 
 bool HasAlpha(unsigned char *argb, unsigned int width, unsigned int height)
@@ -219,63 +200,14 @@ CXBTFFrame createXBTFFrame(RGBAImage &image, CXBTFWriter& writer, double maxMSE,
   int width, height;
   unsigned int format = 0;
   unsigned char* argb = (unsigned char*)image.pixels;
-  unsigned int compressedSize = 0;
-  unsigned char* compressed = NULL;
   
   width  = image.width;
   height = image.height;
   bool hasAlpha = HasAlpha(argb, width, height);
 
-  if (flags & FLAGS_USE_DXT)
-  {
-    double colorMSE, alphaMSE;
-    compressedSize = squish::GetStorageRequirements(width, height, squish::kDxt5);
-    compressed = new unsigned char[compressedSize];
-    // first try DXT1, which is only 4bits/pixel
-    CompressImage(argb, width, height, compressed, squish::kDxt1, colorMSE, alphaMSE);
-    if (colorMSE < maxMSE && alphaMSE < maxMSE)
-    { // success - use it
-      compressedSize = squish::GetStorageRequirements(width, height, squish::kDxt1);
-      format = XB_FMT_DXT1;
-    }
-
-    if (!format)
-    { // try DXT3 and DXT5 - use whichever is better (color is the same, but alpha will be different)
-      CompressImage(argb, width, height, compressed, squish::kDxt3, colorMSE, alphaMSE);
-      if (colorMSE < maxMSE)
-      { // color is fine, test DXT5 as well
-        double dxt5MSE;
-        squish::u8* compressed2 = new squish::u8[squish::GetStorageRequirements(width, height, squish::kDxt5)];
-        CompressImage(argb, width, height, compressed2, squish::kDxt5, colorMSE, dxt5MSE);
-        if (alphaMSE < maxMSE && alphaMSE < dxt5MSE)
-        { // DXT3 passes and is best
-          compressedSize = squish::GetStorageRequirements(width, height, squish::kDxt3);
-          format = XB_FMT_DXT3;
-        }
-        else if (dxt5MSE < maxMSE)
-        { // DXT5 passes
-          compressedSize = squish::GetStorageRequirements(width, height, squish::kDxt5);
-          memcpy(compressed, compressed2, compressedSize);
-          format = XB_FMT_DXT5;
-        }
-        delete[] compressed2;
-      }
-    }
-  }
-
   CXBTFFrame frame; 
-  if (format)
-  {
-    frame = appendContent(writer, width, height, compressed, compressedSize, format, hasAlpha, flags);
-    if (compressedSize)
-      delete[] compressed;
-  }
-  else
-  {
-    // none of the compressed stuff works for us, so we use 32bit texture
-    format = XB_FMT_A8R8G8B8;
-    frame = appendContent(writer, width, height, argb, (width * height * 4), format, hasAlpha, flags);
-  }
+  format = XB_FMT_A8R8G8B8;
+  frame = appendContent(writer, width, height, argb, (width * height * 4), format, hasAlpha, flags);
 
   return frame;
 }
@@ -285,11 +217,8 @@ void Usage()
   puts("Usage:");
   puts("  -help            Show this screen.");
   puts("  -input <dir>     Input directory. Default: current dir");
-  puts("  -output <dir>    Output directory/filename. Default: Textures.xpr");
+  puts("  -output <dir>    Output directory/filename. Default: Textures.xbt");
   puts("  -dupecheck       Enable duplicate file detection. Reduces output file size. Default: off");
-  puts("  -use_lzo         Use lz0 packing.     Default: on");
-  puts("  -use_dxt         Use DXT compression. Default: on");
-  puts("  -use_none        Use No  compression. Default: off");
 }
 
 static bool checkDupe(struct MD5Context* ctx,
@@ -417,20 +346,15 @@ int createBundle(const std::string& InputDir, const std::string& OutputFile, dou
 
 int main(int argc, char* argv[])
 {
-#ifdef USE_LZO_PACKING
   if (lzo_init() != LZO_E_OK)
     return 1;
-#endif
   bool valid = false;
   unsigned int flags = 0;
   bool dupecheck = false;
   CmdLineArgs args(argc, (const char**)argv);
 
-  // setup some defaults, dxt with lzo post packing,
-  flags = FLAGS_USE_DXT;
-#ifdef USE_LZO_PACKING
-  flags |= FLAGS_USE_LZO;
-#endif
+  // setup some defaults, lzo packing,
+  flags = FLAGS_USE_LZO;
 
   if (args.size() == 1)
   {
@@ -466,20 +390,6 @@ int main(int argc, char* argv[])
       while ((c = (char *)strchr(OutputFilename.c_str(), '\\')) != NULL) *c = '/';
 #endif
     }
-    else if (!platform_stricmp(args[i], "-use_none"))
-    {
-      flags &= ~FLAGS_USE_DXT;
-    }
-    else if (!platform_stricmp(args[i], "-use_dxt"))
-    {
-      flags |= FLAGS_USE_DXT;
-    }
-#ifdef USE_LZO_PACKING
-    else if (!platform_stricmp(args[i], "-use_lzo"))
-    {
-      flags |= FLAGS_USE_LZO;
-    }
-#endif
     else
     {
       fprintf(stderr, "Unrecognized command line flag: %s\n", args[i]);

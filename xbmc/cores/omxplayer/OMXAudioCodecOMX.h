@@ -31,11 +31,12 @@ extern "C" {
 
 #include "DVDStreamInfo.h"
 #include "linux/PlatformDefs.h"
+#include "cores/VideoPlayer/Process/ProcessInfo.h"
 
 class COMXAudioCodecOMX
 {
 public:
-  COMXAudioCodecOMX();
+  COMXAudioCodecOMX(CProcessInfo &processInfo);
   virtual ~COMXAudioCodecOMX();
   bool Open(CDVDStreamInfo &hints);
   void Dispose();
@@ -52,6 +53,7 @@ public:
   unsigned int GetFrameSize() { return m_frameSize; }
 
 protected:
+  CProcessInfo &m_processInfo;
   AVCodecContext* m_pCodecContext;
   SwrContext*     m_pConvert;
   enum AVSampleFormat m_iSampleFormat;
@@ -62,8 +64,6 @@ protected:
   BYTE *m_pBufferOutput;
   int   m_iBufferOutputUsed;
   int   m_iBufferOutputAlloced;
-
-  bool m_bOpenedCodec;
 
   int     m_channels;
   CAEChannelInfo m_channelLayout;

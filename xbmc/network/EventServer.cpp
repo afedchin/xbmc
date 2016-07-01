@@ -157,6 +157,9 @@ void CEventServer::Run()
   CSocketListener listener;
   int packetSize = 0;
 
+  if (!CSettings::GetInstance().GetBool(CSettings::SETTING_SERVICES_ESALLINTERFACES))
+    any_addr.SetAddress("127.0.0.1");  // only listen on localhost
+
   CLog::Log(LOGNOTICE, "ES: Starting UDP Event server on %s:%d", any_addr.Address(), m_iPort);
 
   Cleanup();
@@ -364,7 +367,7 @@ bool CEventServer::ExecuteNextAction()
   return false;
 }
 
-unsigned int CEventServer::GetButtonCode(std::string& strMapName, bool& isAxis, float& fAmount)
+unsigned int CEventServer::GetButtonCode(std::string& strMapName, bool& isAxis, float& fAmount, bool &isJoystick)
 {
   CSingleLock lock(m_critSection);
   std::map<unsigned long, CEventClient*>::iterator iter = m_clients.begin();
@@ -372,7 +375,7 @@ unsigned int CEventServer::GetButtonCode(std::string& strMapName, bool& isAxis, 
 
   while (iter != m_clients.end())
   {
-    bcode = iter->second->GetButtonCode(strMapName, isAxis, fAmount);
+    bcode = iter->second->GetButtonCode(strMapName, isAxis, fAmount, isJoystick);
     if (bcode)
       return bcode;
     ++iter;

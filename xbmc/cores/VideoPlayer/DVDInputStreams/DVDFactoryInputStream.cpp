@@ -25,7 +25,8 @@
 #include "DVDInputStreamNavigator.h"
 #include "DVDInputStreamFFmpeg.h"
 #include "DVDInputStreamPVRManager.h"
-#include "DVDInputStreamRTMP.h"
+#include "InputStreamAddon.h"
+#include "InputStreamMultiSource.h"
 #ifdef HAVE_LIBBLURAY
 #include "DVDInputStreamBluray.h"
 #endif
@@ -37,11 +38,52 @@
 #include "URL.h"
 #include "filesystem/File.h"
 #include "utils/URIUtils.h"
+#include "ServiceBroker.h"
+#include "addons/InputStream.h"
+#include "addons/BinaryAddonCache.h"
+#include "Util.h"
 
 
-CDVDInputStream* CDVDFactoryInputStream::CreateInputStream(IVideoPlayer* pPlayer, CFileItem fileitem)
+CDVDInputStream* CDVDFactoryInputStream::CreateInputStream(IVideoPlayer* pPlayer, const CFileItem &fileitem, bool scanforextaudio)
 {
   std::string file = fileitem.GetPath();
+  if (scanforextaudio)
+  {
+    // find any available external audio tracks
+    std::vector<std::string> filenames;
+    filenames.push_back(file);
+    CUtil::ScanForExternalAudio(file, filenames);
+    CUtil::ScanForExternalDemuxSub(file, filenames);
+    if (filenames.size() >= 2)
+    {
+      return CreateInputStream(pPlayer, fileitem, filenames);
+    }
+  }
+
+  ADDON::VECADDONS addons;
+  ADDON::CBinaryAddonCache &addonCache = CServiceBroker::GetBinaryAddonCache();
+  addonCache.GetAddons(addons, ADDON::ADDON_INPUTSTREAM);
+  for (size_t i=0; i<addons.size(); ++i)
+  {
+    std::shared_ptr<ADDON::CInputStream> input(std::static_pointer_cast<ADDON::CInputStream>(addons[i]));
+
+    if (input->Supports(fileitem))
+    {
+      std::shared_ptr<ADDON::CInputStream> addon = input;
+      if (!input->UseParent())
+        addon = std::shared_ptr<ADDON::CInputStream>(new ADDON::CInputStream(*input));
+
+      ADDON_STATUS status = addon->Create();
+      if (status == ADDON_STATUS_OK)
+      {
+        unsigned int videoWidth, videoHeight;
+        pPlayer->GetVideoResolution(videoWidth, videoHeight);
+        addon->SetVideoResolution(videoWidth, videoHeight);
+
+        return new CInputStreamAddon(fileitem, addon);
+      }
+    }
+  }
 
   if (fileitem.IsDiscImage())
   {
@@ -89,25 +131,16 @@ CDVDInputStream* CDVDFactoryInputStream::CreateInputStream(IVideoPlayer* pPlayer
   else if(file.substr(0, 8) == "stack://")
     return new CDVDInputStreamStack(fileitem);
 #endif
-#ifdef HAS_LIBRTMP
   else if(file.substr(0, 7) == "rtmp://"
        || file.substr(0, 8) == "rtmpt://"
        || file.substr(0, 8) == "rtmpe://"
        || file.substr(0, 9) == "rtmpte://"
        || file.substr(0, 8) == "rtmps://")
-    return new CDVDInputStreamRTMP(fileitem);
-#endif
+    return new CDVDInputStreamFFmpeg(fileitem);
   else if (fileitem.IsInternetStream())
   {
     if (fileitem.IsType(".m3u8"))
       return new CDVDInputStreamFFmpeg(fileitem);
-
-    if (fileitem.ContentLookup())
-    {
-      // request header
-      fileitem.SetMimeType("");
-      fileitem.FillInMimeType();
-    }
 
     if (fileitem.GetMimeType() == "application/vnd.apple.mpegurl")
       return new CDVDInputStreamFFmpeg(fileitem);
@@ -115,4 +148,9 @@ CDVDInputStream* CDVDFactoryInputStream::CreateInputStream(IVideoPlayer* pPlayer
 
   // our file interface handles all these types of streams
   return (new CDVDInputStreamFile(fileitem));
+}
+
+CDVDInputStream* CDVDFactoryInputStream::CreateInputStream(IVideoPlayer* pPlayer, const CFileItem &fileitem, const std::vector<std::string>& filenames)
+{
+  return (new CInputStreamMultiSource(pPlayer, fileitem, filenames));
 }

@@ -36,12 +36,17 @@ CSong::CSong(CFileItem& item)
   strTitle = tag.GetTitle();
   genre = tag.GetGenre();
   std::vector<std::string> artist = tag.GetArtist();
-  std::vector<std::string> musicBrainArtistHints = tag.GetMusicBrainzArtistHints();
+  std::vector<std::string> musicBrainzArtistHints = tag.GetMusicBrainzArtistHints();
   strArtistDesc = tag.GetArtistString();
+
   if (!tag.GetMusicBrainzArtistID().empty())
   { // Have musicbrainz artist info, so use it
+
+    // Vector of possible separators in the order least likely to be part of artist name
+    const std::vector<std::string> separators{ " feat. ", " ft. ", " Feat. "," Ft. ", ";", ":", "|", "#", "/", " with ", ",", "&" };
+
     // Establish tag consistency - do the number of musicbrainz ids and number of names in hints or artist match
-    if (tag.GetMusicBrainzArtistID().size() != musicBrainArtistHints.size() &&
+    if (tag.GetMusicBrainzArtistID().size() != musicBrainzArtistHints.size() &&
         tag.GetMusicBrainzArtistID().size() != artist.size())
     {
       // Tags mis-match - report it and then try to fix
@@ -51,20 +56,41 @@ CSong::CSong(CFileItem& item)
         Most likey we have no hints and a single artist name like "Artist1 feat. Artist2"
         or "Composer; Conductor, Orchestra, Soloist" or "Artist1/Artist2" where the
         expected single item separator (default = space-slash-space) as not been used.
-        Comma and slash (no spaces) are poor delimiters as could be in name e.g. AC/DC,
-        but here treat them as such in attempt to find artist names.
+        Ampersand (&), comma and slash (no spaces) are poor delimiters as could be in name
+        e.g. "AC/DC", "Earth, Wind & Fire", but here treat them as such in attempt to find artist names.
+        When there are hints but count not match mbid they could be poorly formatted using unexpected
+        separators so attempt to split them. Or we could have more hints or artist names than
+        musicbrainz id so ingore them but raise warning.
       */
-      if (artist.size() == 1)
+      // Do hints exist yet mis-match
+      if (musicBrainzArtistHints.size() > 0 &&
+        musicBrainzArtistHints.size() != tag.GetMusicBrainzArtistID().size())
       {
-        std::vector<std::string> names;
-        if (artist[0].find(" feat. ") != std::string::npos)
-          names = StringUtils::Split(artist[0], " feat. ");
-        else 
-          names = StringUtils::SplitMulti(artist[0], "/;:|#,");
-        //If we have extracted the right number of names then use them as hints
-        if (tag.GetMusicBrainzArtistID().size() == names.size())
-          musicBrainArtistHints = names;
-      }     
+        if (artist.size() == tag.GetMusicBrainzArtistID().size())
+          // Artist name count matches, use that as hints
+          musicBrainzArtistHints = artist;
+        else if (musicBrainzArtistHints.size() < tag.GetMusicBrainzArtistID().size())
+        { // Try splitting the hints until have matching number
+          musicBrainzArtistHints = StringUtils::SplitMulti(musicBrainzArtistHints, separators, tag.GetMusicBrainzArtistID().size());
+        }
+        else
+          // Extra hints, discard them.
+          musicBrainzArtistHints.resize(tag.GetMusicBrainzArtistID().size());
+      }
+      // Do hints not exist or still mis-match, try artists
+      if (musicBrainzArtistHints.size() != tag.GetMusicBrainzArtistID().size())
+        musicBrainzArtistHints = artist;
+      // Still mis-match, try splitting the hints (now artists) until have matching number
+      if (musicBrainzArtistHints.size() < tag.GetMusicBrainzArtistID().size())
+      {
+        musicBrainzArtistHints = StringUtils::SplitMulti(musicBrainzArtistHints, separators, tag.GetMusicBrainzArtistID().size());
+      }
+    }
+    else
+    { // Either hints or artist names (or both) matches number of musicbrainz id
+      // If hints mis-match, use artists
+      if (musicBrainzArtistHints.size() != tag.GetMusicBrainzArtistID().size())
+        musicBrainzArtistHints = tag.GetArtist();
     }
 
     for (size_t i = 0; i < tag.GetMusicBrainzArtistID().size(); i++)
@@ -73,29 +99,44 @@ CSong::CSong(CFileItem& item)
       std::string artistName;
       /*
        We try and get the corresponding artist name from the hints list.
-       If the hints list is missing or the wrong length, it will try the artist list.
-       We match on the same index, and if that fails just use the first name we have.
-       Failing all else use musicbrainz id as the name and hope later on we can update that entry.
-       If we have more names than musicbrainz id they are ingored, but raise warning.
+       Having already attempted to make the number of hints match, if they
+       still don't then use musicbrainz id as the name and hope later on we
+       can update that entry.
       */
-      if (i < musicBrainArtistHints.size())
-        artistName = musicBrainArtistHints[i];
-      else if (!artist.empty())
-        artistName = (i < artist.size()) ? artist[i] : artist[0];
-      if (artistName.empty())
+      if (i < musicBrainzArtistHints.size())
+        artistName = musicBrainzArtistHints[i];
+      else
         artistName = artistId;
       artistCredits.emplace_back(StringUtils::Trim(artistName), artistId);
     }
   }
   else
-  { // no musicbrainz info, so fill in directly
-    for (std::vector<std::string>::const_iterator it = tag.GetArtist().begin(); it != tag.GetArtist().end(); ++it)
+  { // No musicbrainz artist ids, so fill in directly
+    // Separate artist names further, if possible, and trim blank space.
+    if (musicBrainzArtistHints.size() > tag.GetArtist().size())
+      // Make use of hints (ARTISTS tag), when present, to separate artist names
+      artist = musicBrainzArtistHints;
+    else
+      // Split artist names further using multiple possible delimiters, over single separator applied in Tag loader
+      artist = StringUtils::SplitMulti(artist, g_advancedSettings.m_musicArtistSeparators);
+
+    for (auto artistname: artist)
     {
-      artistCredits.emplace_back(*it);
+      artistCredits.emplace_back(StringUtils::Trim(artistname));
     }
   }
   strAlbum = tag.GetAlbum();
   m_albumArtist = tag.GetAlbumArtist();
+  // Separate album artist names further, if possible, and trim blank space.
+  if (tag.GetMusicBrainzAlbumArtistHints().size() > m_albumArtist.size())
+    // Make use of hints (ALBUMARTISTS tag), when present, to separate artist names
+    m_albumArtist = tag.GetMusicBrainzAlbumArtistHints();
+  else
+    // Split album artist names further using multiple possible delimiters, over single separator applied in Tag loader
+    m_albumArtist = StringUtils::SplitMulti(m_albumArtist, g_advancedSettings.m_musicArtistSeparators);
+  for (auto artistname : m_albumArtist)
+    StringUtils::Trim(artistname);
+
   strMusicBrainzTrackID = tag.GetMusicBrainzTrackID();
   m_musicRoles = tag.GetContributors();
   strComment = tag.GetComment();

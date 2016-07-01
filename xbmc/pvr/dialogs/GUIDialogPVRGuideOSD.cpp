@@ -96,7 +96,7 @@ void CGUIDialogPVRGuideOSD::OnInitWindow()
 
   // select the active entry
   unsigned int iSelectedItem = 0;
-  for (int iEpgPtr = 0; iEpgPtr < m_vecItems->Size(); iEpgPtr++)
+  for (int iEpgPtr = 0; iEpgPtr < m_vecItems->Size(); ++iEpgPtr)
   {
     CFileItemPtr entry = m_vecItems->Get(iEpgPtr);
     if (entry->HasEPGInfoTag() && entry->GetEPGInfoTag()->IsActive())
@@ -133,7 +133,7 @@ void CGUIDialogPVRGuideOSD::ShowInfo(int item)
     return;
 
   /* inform dialog about the file item and open dialog window */
-  pDlgInfo->SetProgInfo(pItem.get());
+  pDlgInfo->SetProgInfo(pItem->GetEPGInfoTag());
   pDlgInfo->Open();
 }
 

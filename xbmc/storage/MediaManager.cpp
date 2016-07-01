@@ -30,7 +30,7 @@
 #include "guilib/GUIWindowManager.h"
 #ifdef HAS_DVD_DRIVE
 #ifndef TARGET_WINDOWS
-// TODO: switch all ports to use auto sources
+//! @todo switch all ports to use auto sources
 #include <map>
 #include <utility>
 #include "DetectDVDType.h"
@@ -314,7 +314,7 @@ void CMediaManager::RemoveAutoSource(const CMediaSource &share)
 
 /////////////////////////////////////////////////////////////
 // AutoSource status functions:
-// - TODO: translate cdda://<device>/
+//! @todo translate cdda://<device>/
 
 std::string CMediaManager::TranslateDevicePath(const std::string& devicePath, bool bReturnAsDevice)
 {
@@ -357,7 +357,7 @@ bool CMediaManager::IsDiscInDrive(const std::string& devicePath)
     return false;
 #else
   if(URIUtils::IsDVD(devicePath) || devicePath.empty())
-    return MEDIA_DETECT::CDetectDVDMedia::IsDiscInDrive();   // TODO: switch all ports to use auto sources
+    return MEDIA_DETECT::CDetectDVDMedia::IsDiscInDrive();   //! @todo switch all ports to use auto sources
   else
     return true; // Assume other paths to be mounted already
 #endif
@@ -379,7 +379,7 @@ bool CMediaManager::IsAudio(const std::string& devicePath)
 
   return false;
 #else
-  // TODO: switch all ports to use auto sources
+  //! @todo switch all ports to use auto sources
   MEDIA_DETECT::CCdInfo* pInfo = MEDIA_DETECT::CDetectDVDMedia::GetCdInfo();
   if (pInfo != NULL && pInfo->IsAudio(1))
     return true;
@@ -546,10 +546,8 @@ std::string CMediaManager::GetDiskUniqueId(const std::string& devicePath)
   CFileItem item(pathVideoTS, false);
   CDVDInputStreamNavigator dvdNavigator(NULL, item);
   dvdNavigator.Open();
-  std::string labelString;
-  dvdNavigator.GetDVDTitleString(labelString);
-  std::string serialString;
-  dvdNavigator.GetDVDSerialString(serialString);
+  std::string labelString = dvdNavigator.GetDVDTitleString();
+  std::string serialString = dvdNavigator.GetDVDSerialString();
 
   std::string strID = StringUtils::Format("removable://%s_%s", labelString.c_str(), serialString.c_str());
   CLog::Log(LOGDEBUG, "GetDiskUniqueId: Got ID %s for DVD disk", strID.c_str());

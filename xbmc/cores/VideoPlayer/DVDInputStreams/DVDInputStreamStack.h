@@ -22,11 +22,12 @@
 
 #include "DVDInputStream.h"
 #include <memory>
+#include <vector>
 
 class CDVDInputStreamStack : public CDVDInputStream
 {
 public:
-  CDVDInputStreamStack(CFileItem& fileitem);
+  CDVDInputStreamStack(const CFileItem& fileitem);
   virtual ~CDVDInputStreamStack();
 
   virtual bool    Open();

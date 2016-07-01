@@ -19,8 +19,8 @@
  *
  */
 
-#include "addons/include/kodi_adsp_types.h"
-#include "cores/AudioEngine/DSPAddons/ActiveAEDSPMode.h"
+#include "addons/kodi-addon-dev-kit/include/kodi/kodi_adsp_types.h"
+#include "cores/AudioEngine/Engines/ActiveAE/AudioDSPAddons/ActiveAEDSPMode.h"
 #include "dialogs/GUIDialogContextMenu.h"
 #include "guilib/GUIDialog.h"
 #include "view/GUIViewControl.h"

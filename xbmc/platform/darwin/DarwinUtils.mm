@@ -206,6 +206,20 @@ bool CDarwinUtils::IsMavericks(void)
   return isMavericks == 1;
 }
 
+bool CDarwinUtils::IsLion(void)  
+{  
+  static int isLion = -1;  
+#if defined(TARGET_DARWIN_OSX)  
+  if (isLion == -1)  
+  {  
+    double appKitVersion = floor(NSAppKitVersionNumber);  
+    // everything lower 10.8 is 10.7.x because 10.7 is deployment target...  
+    isLion = (appKitVersion < NSAppKitVersionNumber10_8) ? 1 : 0;  
+  }  
+#endif  
+  return isLion == 1;  
+}
+
 bool CDarwinUtils::IsSnowLeopard(void)
 {
   static int isSnowLeopard = -1;
@@ -464,44 +478,6 @@ bool CDarwinUtils::IsIosSandboxed(void)
     }
   }
   return ret == 1;
-}
-
-bool CDarwinUtils::HasVideoToolboxDecoder(void)
-{
-  static int DecoderAvailable = -1;
-
-  if (DecoderAvailable == -1)
-  {
-    {
-      /* When XBMC is started from a sandbox directory we have to check the sysctl values */      
-      if (IsIosSandboxed())
-      {
-        uint64_t proc_enforce = 0;
-        uint64_t vnode_enforce = 0; 
-        size_t size = sizeof(vnode_enforce);
-
-        sysctlbyname("security.mac.proc_enforce",  &proc_enforce,  &size, NULL, 0);  
-        sysctlbyname("security.mac.vnode_enforce", &vnode_enforce, &size, NULL, 0);
-
-        if (vnode_enforce && proc_enforce)
-        {
-          DecoderAvailable = 1;
-          CLog::Log(LOGINFO, "VideoToolBox decoder not available. Use : sysctl -w security.mac.proc_enforce=0; sysctl -w security.mac.vnode_enforce=0\n");
-        }
-        else
-        {
-          DecoderAvailable = 1;
-          CLog::Log(LOGINFO, "VideoToolBox decoder available\n");
-        }  
-      }
-      else
-      {
-        DecoderAvailable = 1;
-      }
-    }
-  }
-
-  return (DecoderAvailable == 1);
 }
 
 int CDarwinUtils::BatteryLevel(void)

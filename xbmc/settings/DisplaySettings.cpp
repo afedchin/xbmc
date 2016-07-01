@@ -27,6 +27,8 @@
 #include <utility>
 #include <vector>
 
+#include "cores/VideoPlayer/VideoRenderers/ColorManager.h"
+#include "dialogs/GUIDialogFileBrowser.h"
 #include "guilib/GraphicContext.h"
 #include "guilib/gui3d.h"
 #include "guilib/LocalizeStrings.h"
@@ -36,6 +38,7 @@
 #include "settings/AdvancedSettings.h"
 #include "settings/lib/Setting.h"
 #include "settings/Settings.h"
+#include "storage/MediaManager.h"
 #include "threads/SingleLock.h"
 #include "utils/log.h"
 #include "utils/StringUtils.h"
@@ -221,6 +224,34 @@ void CDisplaySettings::Clear()
   m_nonLinearStretched = false;
 }
 
+void CDisplaySettings::OnSettingAction(const CSetting *setting)
+{
+  if (setting == NULL)
+    return;
+
+  const std::string &settingId = setting->GetId();
+  if (settingId == "videoscreen.cms3dlut")
+  {
+    std::string path = ((CSettingString*)setting)->GetValue();
+    VECSOURCES shares;
+    g_mediaManager.GetLocalDrives(shares);
+    if (CGUIDialogFileBrowser::ShowAndGetFile(shares, ".3dlut", g_localizeStrings.Get(36580), path))
+    {
+      ((CSettingString*)setting)->SetValue(path);
+    }
+  }
+  else if (settingId == "videoscreen.displayprofile")
+  {
+    std::string path = ((CSettingString*)setting)->GetValue();
+    VECSOURCES shares;
+    g_mediaManager.GetLocalDrives(shares);
+    if (CGUIDialogFileBrowser::ShowAndGetFile(shares, ".icc|.icm", g_localizeStrings.Get(36581), path))
+    {
+      ((CSettingString*)setting)->SetValue(path);
+    }
+  }
+}
+
 bool CDisplaySettings::OnSettingChanging(const CSetting *setting)
 {
   if (setting == NULL)
@@ -322,16 +353,6 @@ bool CDisplaySettings::OnSettingUpdate(CSetting* &setting, const char *oldSettin
       return screenmodeSetting->SetValue(screenmode + "pstd");
     if (screenmode.size() == 21)
       return screenmodeSetting->SetValue(screenmode + "std");
-  }
-  else if (settingId == CSettings::SETTING_VIDEOSCREEN_VSYNC)
-  {
-    // This ifdef is intended to catch everything except Linux and FreeBSD
-#if !defined(TARGET_LINUX) || defined(TARGET_DARWIN) || defined(TARGET_ANDROID) || defined(TARGET_RASPBERRY_PI)
-    // in the Gotham alphas through beta3 the default value for darwin and android was set incorrectly.
-    CSettingInt *vsyncSetting = (CSettingInt*)setting;
-    if (vsyncSetting->GetValue() == VSYNC_DRIVER)
-      return vsyncSetting->SetValue(VSYNC_ALWAYS);
-#endif
   }
   else if (settingId == CSettings::SETTING_VIDEOSCREEN_PREFEREDSTEREOSCOPICMODE)
   {
@@ -511,7 +532,7 @@ void CDisplaySettings::UpdateCalibrations()
     {
       if (StringUtils::EqualsNoCase(itCal->strMode, m_resolutions[res].strMode))
       {
-        // TODO: erase calibrations with default values
+        //! @todo erase calibrations with default values
         *itCal = m_resolutions[res];
         found = true;
         break;
@@ -728,17 +749,6 @@ void CDisplaySettings::SettingOptionsScreensFiller(const CSetting *setting, std:
 #endif
 }
 
-void CDisplaySettings::SettingOptionsVerticalSyncsFiller(const CSetting *setting, std::vector< std::pair<std::string, int> > &list, int &current, void *data)
-{
-  // This ifdef is intended to catch everything except Linux and FreeBSD
-#if defined(TARGET_LINUX) && !defined(TARGET_DARWIN) && !defined(TARGET_ANDROID) && !defined(TARGET_RASPBERRY_PI)
-  list.push_back(std::make_pair(g_localizeStrings.Get(13101), VSYNC_DRIVER));
-#endif
-  list.push_back(std::make_pair(g_localizeStrings.Get(13106), VSYNC_DISABLED));
-  list.push_back(std::make_pair(g_localizeStrings.Get(13107), VSYNC_VIDEO));
-  list.push_back(std::make_pair(g_localizeStrings.Get(13108), VSYNC_ALWAYS));
-}
-
 void CDisplaySettings::SettingOptionsStereoscopicModesFiller(const CSetting *setting, std::vector< std::pair<std::string, int> > &list, int &current, void *data)
 {
   for (int i = RENDER_STEREO_MODE_OFF; i < RENDER_STEREO_MODE_COUNT; i++)
@@ -788,3 +798,36 @@ void CDisplaySettings::ClearCustomResolutions()
     m_resolutions.erase(firstCustom, m_resolutions.end());
   }
 }
+
+void CDisplaySettings::SettingOptionsCmsModesFiller(const CSetting *setting, std::vector< std::pair<std::string, int> > &list, int &current, void *data)
+{
+  list.push_back(std::make_pair(g_localizeStrings.Get(36580), CMS_MODE_3DLUT));
+#ifdef HAVE_LCMS2
+  list.push_back(std::make_pair(g_localizeStrings.Get(36581), CMS_MODE_PROFILE));
+#endif
+}
+
+void CDisplaySettings::SettingOptionsCmsWhitepointsFiller(const CSetting *setting, std::vector< std::pair<std::string, int> > &list, int &current, void *data)
+{
+  list.push_back(std::make_pair(g_localizeStrings.Get(36586), CMS_WHITEPOINT_D65));
+  list.push_back(std::make_pair(g_localizeStrings.Get(36587), CMS_WHITEPOINT_D93));
+}
+
+void CDisplaySettings::SettingOptionsCmsPrimariesFiller(const CSetting *setting, std::vector< std::pair<std::string, int> > &list, int &current, void *data)
+{
+  list.push_back(std::make_pair(g_localizeStrings.Get(36588), CMS_PRIMARIES_AUTO));
+  list.push_back(std::make_pair(g_localizeStrings.Get(36589), CMS_PRIMARIES_BT709));
+  list.push_back(std::make_pair(g_localizeStrings.Get(36590), CMS_PRIMARIES_170M));
+  list.push_back(std::make_pair(g_localizeStrings.Get(36591), CMS_PRIMARIES_BT470M));
+  list.push_back(std::make_pair(g_localizeStrings.Get(36592), CMS_PRIMARIES_BT470BG));
+  list.push_back(std::make_pair(g_localizeStrings.Get(36593), CMS_PRIMARIES_240M));
+}
+
+void CDisplaySettings::SettingOptionsCmsGammaModesFiller(const CSetting *setting, std::vector< std::pair<std::string, int> > &list, int &current, void *data)
+{
+  list.push_back(std::make_pair(g_localizeStrings.Get(36582), CMS_TRC_BT1886));
+  list.push_back(std::make_pair(g_localizeStrings.Get(36583), CMS_TRC_INPUT_OFFSET));
+  list.push_back(std::make_pair(g_localizeStrings.Get(36584), CMS_TRC_OUTPUT_OFFSET));
+  list.push_back(std::make_pair(g_localizeStrings.Get(36585), CMS_TRC_ABSOLUTE));
+}
+

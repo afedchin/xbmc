@@ -28,6 +28,7 @@
 #include "input/Key.h"
 #include "TextureCache.h"
 #include "WindowIDs.h"
+#include "utils/Random.h"
 #include "utils/StringUtils.h"
 
 using namespace XFILE;
@@ -103,7 +104,7 @@ void CGUIMultiImage::UpdateInfo(const CGUIListItem *item)
       texturePath = m_texturePath.GetItemLabel(item, true);
     else
       texturePath = m_texturePath.GetLabel(m_parentID);
-    if (texturePath != m_currentPath && !texturePath.empty())
+    if (texturePath != m_currentPath)
     {
       // a new path - set our current path and tell ourselves to load our directory
       m_currentPath = texturePath;
@@ -138,6 +139,8 @@ void CGUIMultiImage::Process(unsigned int currentTime, CDirtyRegionList &dirtyre
       }
     }
   }
+  else
+    m_image.SetFileName("");
 
   if (g_graphicsContext.SetClipRegion(m_posX, m_posY, m_width, m_height))
   {
@@ -247,7 +250,7 @@ void CGUIMultiImage::OnDirectoryLoaded()
 {
   // Randomize or sort our images if necessary
   if (m_randomized)
-    random_shuffle(m_files.begin(), m_files.end());
+    KODI::UTILS::RandomShuffle(m_files.begin(), m_files.end());
   else
     sort(m_files.begin(), m_files.end());
 

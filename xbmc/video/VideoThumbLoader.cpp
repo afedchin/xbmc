@@ -131,7 +131,9 @@ bool CThumbExtractor::DoWork()
       }
     }
   }
-  else if (!m_item.HasVideoInfoTag() || !m_item.GetVideoInfoTag()->HasStreamDetails())
+  else if (!m_item.IsPlugin() &&
+           (!m_item.HasVideoInfoTag() ||
+           !m_item.GetVideoInfoTag()->HasStreamDetails()))
   {
     // No tag or no details set, so extract them
     CLog::Log(LOGDEBUG,"%s - trying to extract filestream details from video file %s", __FUNCTION__, CURL::GetRedacted(m_item.GetPath()).c_str());
@@ -524,7 +526,7 @@ std::string CVideoThumbLoader::GetLocalArt(const CFileItem &item, const std::str
      thumbloader thread accesses the streamed filesystem at the same time as the
      App thread and the latter has to wait for it.
    */
-  if (item.m_bIsFolder && (item.IsInternetStream(true) || g_advancedSettings.m_networkBufferMode == 1))
+  if (item.m_bIsFolder && (item.IsInternetStream(true) || g_advancedSettings.m_cacheBufferMode == CACHE_BUFFER_MODE_ALL))
   {
     CFileItemList items; // Dummy list
     CDirectory::GetDirectory(item.GetPath(), items, "", DIR_FLAG_NO_FILE_DIRS | DIR_FLAG_READ_CACHE | DIR_FLAG_NO_FILE_INFO);
@@ -620,7 +622,7 @@ void CVideoThumbLoader::DetectAndAddMissingItemData(CFileItem &item)
     m_videoDatabase->Close();
 
     // still empty, try grabbing from filename
-    // TODO: in case of too many false positives due to using the full path, extract the filename only using string utils
+    //! @todo in case of too many false positives due to using the full path, extract the filename only using string utils
     if (stereoMode.empty())
       stereoMode = CStereoscopicsManager::GetInstance().DetectStereoModeByString( path );
   }

@@ -32,18 +32,18 @@ class CBitstreamParser;
 class CBitstreamConverter;
 
 class CDVDVideoCodecAmlogic;
-class IVPClockCallback;
 
 class CDVDAmlogicInfo
 {
 public:
-  CDVDAmlogicInfo(CDVDVideoCodecAmlogic *codec, CAMLCodec *amlcodec);
+  CDVDAmlogicInfo(CDVDVideoCodecAmlogic *codec, CAMLCodec *amlcodec, int omxPts);
 
   // reference counting
   CDVDAmlogicInfo* Retain();
   long             Release();
 
   CAMLCodec *getAmlCodec() const;
+  int GetOmxPts() const { return m_omxPts; }
   void invalidate();
 
 protected:
@@ -52,6 +52,7 @@ protected:
 
   CDVDVideoCodecAmlogic* m_codec;
   CAMLCodec* m_amlCodec;
+  int m_omxPts;
 };
 
 class CDVDVideoCodecAmlogic : public CDVDVideoCodec
@@ -59,12 +60,11 @@ class CDVDVideoCodecAmlogic : public CDVDVideoCodec
   friend class CDVDAmlogicInfo;
 
 public:
-  CDVDVideoCodecAmlogic(IVPClockCallback* clock);
+  CDVDVideoCodecAmlogic(CProcessInfo &processInfo);
   virtual ~CDVDVideoCodecAmlogic();
 
   // Required overrides
   virtual bool Open(CDVDStreamInfo &hints, CDVDCodecOptions &options);
-  virtual void Dispose(void);
   virtual int  Decode(uint8_t *pData, int iSize, double dts, double pts);
   virtual void Reset(void);
   virtual bool GetPicture(DVDVideoPicture *pDvdVideoPicture);
@@ -76,12 +76,12 @@ public:
   virtual const char* GetName(void) { return (const char*)m_pFormatName; }
 
 protected:
+  void            Dispose(void);
   void            FrameQueuePop(void);
   void            FrameQueuePush(double dts, double pts);
   void            FrameRateTracking(uint8_t *pData, int iSize, double dts, double pts);
   void            RemoveInfo(CDVDAmlogicInfo* info);
 
-  IVPClockCallback* m_clock;
   CAMLCodec      *m_Codec;
   std::set<CDVDAmlogicInfo*> m_inflight;
   const char     *m_pFormatName;
