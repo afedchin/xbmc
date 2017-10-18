@@ -21,7 +21,7 @@ echo Downloading from mirror %KODI_MIRROR%
 
 REM Locate the BuildDependencies directory, based on the path of this script
 SET BUILD_DEPS_PATH=%WORKSPACE%\project\BuildDependencies
-SET APP_PATH=%WORKSPACE%
+SET APP_PATH=%WORKSPACE%\project\BuildDependencies\%TARGETPLATFORM%
 SET TMP_PATH=%BUILD_DEPS_PATH%\scripts\tmp
 
 REM Change to the BuildDependencies directory, if we're not there already
