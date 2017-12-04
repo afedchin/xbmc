@@ -100,3 +100,5 @@ if(CMAKE_GENERATOR MATCHES "Visual Studio")
              "set PreferredToolArchitecture=x64\n"
              "start %~dp0\\${PROJECT_NAME}.sln")
 endif()
+
+include(${CMAKE_SOURCE_DIR}/cmake/scripts/windows/patch.cmake)

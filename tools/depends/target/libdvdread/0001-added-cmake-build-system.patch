@@ -1,0 +1,1045 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+new file mode 100644
+index 0000000..303eb21
+--- /dev/null
++++ b/CMakeLists.txt
+@@ -0,0 +1,164 @@
++cmake_minimum_required(VERSION 3.1)
++
++set(DVDREAD_VERSION_MAJOR 5)
++set(DVDREAD_VERSION_MINOR 90)
++set(DVDREAD_VERSION_MICRO 0)
++set(DVDREAD_VERSION "${DVDREAD_VERSION_MAJOR}.${DVDREAD_VERSION_MINOR}.${DVDREAD_VERSION_MICRO}")
++set(PACKAGE_VERSION ${DVDREAD_VERSION})
++
++project(dvdread LANGUAGES C VERSION ${DVDREAD_VERSION})
++
++set(CMAKE_MODULE_PATH
++    ${CMAKE_CURRENT_SOURCE_DIR}/cmake
++    ${CMAKE_MODULE_PATH})
++
++#if(MSVC)
++#  set(CMAKE_REQUIRED_INCLUDES ${CMAKE_CURRENT_SOURCE_DIR}/msvc/include
++#                              ${CMAKE_REQUIRED_INCLUDES})
++#endif()
++
++include(CheckIncludeFile)
++include(CheckFunctionExists)
++include(TestLargeFiles)
++include(CheckHeadersSTDC)
++include(CheckFileOffsetBits)
++
++find_package(dvdcss NO_MODULE)
++if(dvdcss_FOUND)
++  set(HAVE_DVDCSS_DVDCSS_H 1)
++endif()
++
++check_include_file(dirent.h HAVE_DIRENT_H)
++check_include_file(dlfcn.h HAVE_DLFCN_H)
++check_include_file(inttypes.h HAVE_INTTYPES_H)
++check_include_file(limits.h HAVE_LIMITS_H)
++check_include_file(memory.h HAVE_MEMORY_H)
++check_include_file(stdint.h HAVE_STDINT_H)
++check_include_file(stdlib.h HAVE_STDLIB_H)
++check_include_file(strings.h HAVE_STRINGS_H)
++check_include_file(string.h HAVE_STRING_H)
++check_include_file(sys/param.h HAVE_SYS_PARAM_H)
++check_include_file(sys/stat.h HAVE_SYS_STAT_H)
++check_include_file(sys/types.h HAVE_SYS_TYPES_H)
++check_include_file(unistd.h HAVE_UNISTD_H)
++
++check_function_exists(gettimeofday HAVE_GETTIMEOFDAY)
++test_large_files(HAVE_LARGEFILES)
++check_header_stdc()
++check_file_offset_bits()
++
++if(MSVC)
++  if (CMAKE_SYSTEM_NAME STREQUAL "WindowsStore")
++    add_definitions(/wd4146)
++  endif()
++endif()
++
++set(LT_OBJDIR "./libs")
++set(PACKAGE ${PROJECT_NAME})
++set(PACKAGE_NAME ${PROJECT_NAME})
++set(PACKAGE_STRING "${PROJECT_NAME} ${DVDREAD_VERSION}")
++set(PACKAGE_TARNAME ${PROJECT_NAME})
++set(PACKAGE_URL "https://www.videolan.org/developers/libdvdread.html")
++set(PACKAGE_VERSION ${DVDREAD_VERSION})
++set(STDC_HEADERS 1)
++set(SUPPORT_ATTRIBUTE_VISIBILITY_DEFAULT 1)
++set(SUPPORT_FLAG_VISIBILITY 1)
++set(VERSION ${DVDREAD_VERSION})
++set(_WIN32_IE "0x0600")
++#set(UNUSED "__attribute__((unused))")
++set(UNUSED " ")
++
++configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cm ${CMAKE_BINARY_DIR}/config.h)
++configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/dvdread/version.h.in ${CMAKE_BINARY_DIR}/version.h @ONLY)
++
++add_library(${PROJECT_NAME}
++  src/bitreader.c
++  src/bswap.h
++  src/dvd_input.c
++  src/dvd_input.h
++  src/dvd_reader.c
++  src/dvd_udf.c
++  src/dvdread_internal.h
++  src/ifo_print.c
++  src/ifo_read.c
++  src/md5.c
++  src/md5.h
++  src/nav_print.c
++  src/nav_read.c
++)
++add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
++target_include_directories(${PROJECT_NAME}
++  PRIVATE
++  $<BUILD_INTERFACE:.;src;src/dvdread;msvc/include;${CMAKE_CURRENT_BINARY_DIR}>
++  INTERFACE
++  $<INSTALL_INTERFACE:include>
++)
++if(dvdcss_FOUND)
++  target_link_libraries(${PROJECT_NAME} PRIVATE dvdcss::dvdcss)
++endif()
++
++if(MSVC)
++  target_compile_definitions(${PROJECT_NAME}
++    PRIVATE 
++      _XBMC
++      _CRT_SECURE_NO_WARNINGS
++      _CRT_NONSTDC_NO_DEPRECATE
++      PATH_MAX=1024
++  )
++endif()
++
++include(CMakePackageConfigHelpers)
++write_basic_package_version_file(
++  ${CMAKE_CURRENT_BINARY_DIR}/dvdread-config-version.cmake
++  VERSION ${DVDREAD_VERSION}
++  COMPATIBILITY AnyNewerVersion
++)
++
++install(TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}
++  RUNTIME DESTINATION bin
++  ARCHIVE DESTINATION lib
++  LIBRARY DESTINATION lib
++  CONFIGURATIONS RelWithDebInfo Debug
++)
++
++
++install(FILES
++  ${CMAKE_CURRENT_SOURCE_DIR}/src/dvdread/bitreader.h
++  ${CMAKE_CURRENT_SOURCE_DIR}/src/dvdread/dvd_reader.h
++  ${CMAKE_CURRENT_SOURCE_DIR}/src/dvdread/dvd_udf.h
++  ${CMAKE_CURRENT_SOURCE_DIR}/src/dvdread/ifo_print.h
++  ${CMAKE_CURRENT_SOURCE_DIR}/src/dvdread/ifo_read.h
++  ${CMAKE_CURRENT_SOURCE_DIR}/src/dvdread/ifo_types.h
++  ${CMAKE_CURRENT_SOURCE_DIR}/src/dvdread/nav_print.h
++  ${CMAKE_CURRENT_SOURCE_DIR}/src/dvdread/nav_read.h
++  ${CMAKE_CURRENT_SOURCE_DIR}/src/dvdread/nav_types.h
++  ${CMAKE_CURRENT_BINARY_DIR}/version.h
++  DESTINATION include/dvdread)
++
++install(EXPORT ${PROJECT_NAME}
++  FILE
++    dvdread.cmake
++  NAMESPACE
++    dvdread::
++  DESTINATION
++    lib/cmake/dvdread
++)
++install(
++  FILES
++    cmake/dvdread-config.cmake
++    ${CMAKE_CURRENT_BINARY_DIR}/dvdread-config-version.cmake
++  DESTINATION
++    lib/cmake/dvdread
++)
++if(MSVC AND BUILD_SHARED_LIBS)
++  install(FILES 
++    $<TARGET_PDB_FILE:dvdread>
++    DESTINATION lib
++    CONFIGURATIONS RelWithDebInfo Debug
++  )
++endif()
++export(TARGETS dvdread
++  FILE
++  ${CMAKE_CURRENT_BINARY_DIR}/dvdread-config.cmake
++  NAMESPACE dvdread::
++)
+diff --git a/cmake/CheckDIRSymbolExists.cmake b/cmake/CheckDIRSymbolExists.cmake
+new file mode 100644
+index 0000000..08beea6
+--- /dev/null
++++ b/cmake/CheckDIRSymbolExists.cmake
+@@ -0,0 +1,75 @@
++# - Check if the DIR symbol exists like in AC_HEADER_DIRENT.
++# CHECK_DIRSYMBOL_EXISTS(FILES VARIABLE)
++#
++#  FILES    - include files to check
++#  VARIABLE - variable to return result
++#
++# This module is a small but important variation on CheckSymbolExists.cmake.
++# The symbol always searched for is DIR, and the test programme follows
++# the AC_HEADER_DIRENT test programme rather than the CheckSymbolExists.cmake
++# test programme which always fails since DIR tends to be typedef'd
++# rather than #define'd.
++# 
++# The following variables may be set before calling this macro to
++# modify the way the check is run:
++#
++#  CMAKE_REQUIRED_FLAGS = string of compile command line flags
++#  CMAKE_REQUIRED_DEFINITIONS = list of macros to define (-DFOO=bar)
++#  CMAKE_REQUIRED_INCLUDES = list of include directories
++#  CMAKE_REQUIRED_LIBRARIES = list of libraries to link
++
++MACRO(CHECK_DIRSYMBOL_EXISTS FILES VARIABLE)
++  IF(NOT DEFINED ${VARIABLE})
++    SET(CMAKE_CONFIGURABLE_FILE_CONTENT "/* */\n")
++    SET(MACRO_CHECK_DIRSYMBOL_EXISTS_FLAGS ${CMAKE_REQUIRED_FLAGS})
++    IF(CMAKE_REQUIRED_LIBRARIES)
++      SET(CHECK_DIRSYMBOL_EXISTS_LIBS 
++        "-DLINK_LIBRARIES:STRING=${CMAKE_REQUIRED_LIBRARIES}")
++    ELSE(CMAKE_REQUIRED_LIBRARIES)
++      SET(CHECK_DIRSYMBOL_EXISTS_LIBS)
++    ENDIF(CMAKE_REQUIRED_LIBRARIES)
++    IF(CMAKE_REQUIRED_INCLUDES)
++      SET(CMAKE_DIRSYMBOL_EXISTS_INCLUDES
++        "-DINCLUDE_DIRECTORIES:STRING=${CMAKE_REQUIRED_INCLUDES}")
++    ELSE(CMAKE_REQUIRED_INCLUDES)
++      SET(CMAKE_DIRSYMBOL_EXISTS_INCLUDES)
++    ENDIF(CMAKE_REQUIRED_INCLUDES)
++    FOREACH(FILE ${FILES})
++      SET(CMAKE_CONFIGURABLE_FILE_CONTENT
++        "${CMAKE_CONFIGURABLE_FILE_CONTENT}#include <${FILE}>\n")
++    ENDFOREACH(FILE)
++    SET(CMAKE_CONFIGURABLE_FILE_CONTENT
++      "${CMAKE_CONFIGURABLE_FILE_CONTENT}\nint main()\n{if ((DIR *) 0) return 0;}\n")
++
++    CONFIGURE_FILE("${CMAKE_ROOT}/Modules/CMakeConfigurableFile.in"
++      "${CMAKE_BINARY_DIR}/CMakeFiles/CMakeTmp/CheckDIRSymbolExists.c" @ONLY)
++
++    MESSAGE(STATUS "Looking for DIR in ${FILES}")
++    TRY_COMPILE(${VARIABLE}
++      ${CMAKE_BINARY_DIR}
++      ${CMAKE_BINARY_DIR}/CMakeFiles/CMakeTmp/CheckDIRSymbolExists.c
++      COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS}
++      CMAKE_FLAGS 
++      -DCOMPILE_DEFINITIONS:STRING=${MACRO_CHECK_DIRSYMBOL_EXISTS_FLAGS}
++      "${CHECK_DIRSYMBOL_EXISTS_LIBS}"
++      "${CMAKE_DIRSYMBOL_EXISTS_INCLUDES}"
++      OUTPUT_VARIABLE OUTPUT)
++    IF(${VARIABLE})
++      MESSAGE(STATUS "Looking for DIR in ${FILES} - found")
++      SET(${VARIABLE} 1 CACHE INTERNAL "Have symbol DIR")
++      FILE(APPEND ${CMAKE_BINARY_DIR}/CMakeFiles/CMakeOutput.log 
++        "Determining if the DIR symbol is defined as in AC_HEADER_DIRENT "
++        "passed with the following output:\n"
++        "${OUTPUT}\nFile ${CMAKE_BINARY_DIR}/CMakeFiles/CMakeTmp/CheckDIRSymbolExists.c:\n"
++        "${CMAKE_CONFIGURABLE_FILE_CONTENT}\n")
++    ELSE(${VARIABLE})
++      MESSAGE(STATUS "Looking for DIR in ${FILES} - not found.")
++      SET(${VARIABLE} "" CACHE INTERNAL "Have symbol DIR")
++      FILE(APPEND ${CMAKE_BINARY_DIR}/CMakeFiles/CMakeError.log 
++        "Determining if the DIR symbol is defined as in AC_HEADER_DIRENT "
++        "failed with the following output:\n"
++        "${OUTPUT}\nFile ${CMAKE_BINARY_DIR}/CMakeFiles/CMakeTmp/CheckDIRSymbolExists.c:\n"
++        "${CMAKE_CONFIGURABLE_FILE_CONTENT}\n")
++    ENDIF(${VARIABLE})
++  ENDIF(NOT DEFINED ${VARIABLE})
++ENDMACRO(CHECK_DIRSYMBOL_EXISTS)
+diff --git a/cmake/CheckFileOffsetBits.c b/cmake/CheckFileOffsetBits.c
+new file mode 100644
+index 0000000..d948fec
+--- /dev/null
++++ b/cmake/CheckFileOffsetBits.c
+@@ -0,0 +1,14 @@
++#include <sys/types.h>
++
++#define KB ((off_t)1024)
++#define MB ((off_t)1024 * KB)
++#define GB ((off_t)1024 * MB)
++#define TB ((off_t)1024 * GB)
++int t2[(((64 * GB -1) % 671088649) == 268434537)
++       && (((TB - (64 * GB -1) + 255) % 1792151290) == 305159546)? 1: -1];
++
++int main()
++{
++  ;
++  return 0;
++}
+diff --git a/cmake/CheckFileOffsetBits.cmake b/cmake/CheckFileOffsetBits.cmake
+new file mode 100644
+index 0000000..b347c93
+--- /dev/null
++++ b/cmake/CheckFileOffsetBits.cmake
+@@ -0,0 +1,44 @@
++# - Check if _FILE_OFFSET_BITS macro needed for large files
++# CHECK_FILE_OFFSET_BITS ()
++#
++# The following variables may be set before calling this macro to
++# modify the way the check is run:
++#
++#  CMAKE_REQUIRED_FLAGS = string of compile command line flags
++#  CMAKE_REQUIRED_DEFINITIONS = list of macros to define (-DFOO=bar)
++#  CMAKE_REQUIRED_INCLUDES = list of include directories
++# Copyright (c) 2009, Michihiro NAKAJIMA
++#
++# Redistribution and use is allowed according to the terms of the BSD license.
++# For details see the accompanying COPYING-CMAKE-SCRIPTS file.
++
++#INCLUDE(CheckCXXSourceCompiles)
++
++GET_FILENAME_COMPONENT(_selfdir_CheckFileOffsetBits
++	 "${CMAKE_CURRENT_LIST_FILE}" PATH)
++
++MACRO (CHECK_FILE_OFFSET_BITS)
++  IF(NOT DEFINED _FILE_OFFSET_BITS)
++    MESSAGE(STATUS "Checking _FILE_OFFSET_BITS for large files")
++    TRY_COMPILE(__WITHOUT_FILE_OFFSET_BITS_64
++      ${CMAKE_CURRENT_BINARY_DIR}
++      ${_selfdir_CheckFileOffsetBits}/CheckFileOffsetBits.c
++      COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS})
++    IF(NOT __WITHOUT_FILE_OFFSET_BITS_64)
++      TRY_COMPILE(__WITH_FILE_OFFSET_BITS_64
++        ${CMAKE_CURRENT_BINARY_DIR}
++        ${_selfdir_CheckFileOffsetBits}/CheckFileOffsetBits.c
++        COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS} -D_FILE_OFFSET_BITS=64)
++    ENDIF(NOT __WITHOUT_FILE_OFFSET_BITS_64)
++
++    IF(NOT __WITHOUT_FILE_OFFSET_BITS_64 AND __WITH_FILE_OFFSET_BITS_64)
++      SET(_FILE_OFFSET_BITS 64 CACHE INTERNAL "_FILE_OFFSET_BITS macro needed for large files")
++      MESSAGE(STATUS "Checking _FILE_OFFSET_BITS for large files - needed")
++    ELSE(NOT __WITHOUT_FILE_OFFSET_BITS_64 AND __WITH_FILE_OFFSET_BITS_64)
++      SET(_FILE_OFFSET_BITS "" CACHE INTERNAL "_FILE_OFFSET_BITS macro needed for large files")
++      MESSAGE(STATUS "Checking _FILE_OFFSET_BITS for large files - not needed")
++    ENDIF(NOT __WITHOUT_FILE_OFFSET_BITS_64 AND __WITH_FILE_OFFSET_BITS_64)
++  ENDIF(NOT DEFINED _FILE_OFFSET_BITS)
++
++ENDMACRO (CHECK_FILE_OFFSET_BITS)
++
+diff --git a/cmake/CheckHeadersSTDC.cmake b/cmake/CheckHeadersSTDC.cmake
+new file mode 100644
+index 0000000..dafc1e2
+--- /dev/null
++++ b/cmake/CheckHeadersSTDC.cmake
+@@ -0,0 +1,46 @@
++# analogue of AC_HEADER_STDC automake macro.
++# refactored a bit from https://github.com/LuaDist/libgd/blob/master/cmake/modules/AC_HEADER_STDC.cmake
++
++macro(check_header_stdc)
++
++include(CheckIncludeFiles)
++include(CheckDIRSymbolExists)
++
++check_include_files("dlfcn.h;stdint.h;stddef.h;inttypes.h;stdlib.h;strings.h;string.h;float.h" StandardHeadersExist)
++if(StandardHeadersExist)
++#        check_prototype_exists(memchr string.h memchrExists)
++#        if(memchrExists)
++
++                check_prototype_exists(free stdlib.h freeExists)
++                if(freeExists)
++                        message(STATUS "ANSI C header files - found")
++                        set(STDC_HEADERS 1 CACHE INTERNAL "System has ANSI C header files")
++                        set(HAVE_STRINGS_H 1)
++                        set(HAVE_STRING_H 1)
++                        set(HAVE_FLOAT_H 1)
++                        set(HAVE_STDLIB_H 1)
++                        set(HAVE_STDDEF_H 1)
++                        set(HAVE_STDINT_H 1)
++                        set(HAVE_INTTYPES_H 1)
++                        set(HAVE_DLFCN_H 1)
++                endif(freeExists)
++#        endif(memchrExists)
++endif(StandardHeadersExist)
++
++if(NOT STDC_HEADERS)
++  message(STATUS "ANSI C header files - not found")
++  set(STDC_HEADERS 0 CACHE INTERNAL "System has ANSI C header files")
++endif(NOT STDC_HEADERS)
++
++check_include_files(unistd.h HAVE_UNISTD_H)
++check_dirsymbol_exists("sys/stat.h;sys/types.h;dirent.h" HAVE_DIRENT_H)
++
++if (HAVE_DIRENT_H)
++  set(HAVE_SYS_STAT_H 1)
++  set(HAVE_SYS_TYPES_H 1)
++endif (HAVE_DIRENT_H)
++
++check_include_files("dlfcn.h;stdint.h;stddef.h;inttypes.h;stdlib.h;strings.h;string.h;float.h" StandardHeadersExist)
++
++set(HAVE_LIBM 1)
++endmacro()
+\ No newline at end of file
+diff --git a/cmake/TestFileOffsetBits.c b/cmake/TestFileOffsetBits.c
+new file mode 100644
+index 0000000..cd679c1
+--- /dev/null
++++ b/cmake/TestFileOffsetBits.c
+@@ -0,0 +1,11 @@
++#include <sys/types.h>
++
++/* Cause a compile-time error if off_t is smaller than 64 bits */
++#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
++int off_t_is_large[ (LARGE_OFF_T % 2147483629 == 721 && LARGE_OFF_T % 2147483647 == 1) ? 1 : -1 ];  
++
++int main(int argc, char **argv)
++{
++  return 0;
++}
++
+diff --git a/cmake/TestLargeFiles.c.cmake.in b/cmake/TestLargeFiles.c.cmake.in
+new file mode 100644
+index 0000000..623f95f
+--- /dev/null
++++ b/cmake/TestLargeFiles.c.cmake.in
+@@ -0,0 +1,23 @@
++#cmakedefine _LARGEFILE_SOURCE
++#cmakedefine _LARGE_FILES
++#cmakedefine _FILE_OFFSET_BITS @_FILE_OFFSET_BITS@
++
++#include <sys/types.h>
++#include <stdio.h>
++#include <stdlib.h>
++
++int main(int argc, char **argv)
++{
++  /* Cause a compile-time error if off_t is smaller than 64 bits,
++   * and make sure we have ftello / fseeko.
++   */
++#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
++  int off_t_is_large[ (LARGE_OFF_T % 2147483629 == 721 && LARGE_OFF_T % 2147483647 == 1) ? 1 : -1 ];
++  FILE *fp = fopen(argv[0],"r");
++  off_t offset = ftello( fp );
++
++  fseeko( fp, offset, SEEK_CUR );
++  fclose(fp);
++  return 0;
++}
++
+diff --git a/cmake/TestLargeFiles.cmake b/cmake/TestLargeFiles.cmake
+new file mode 100644
+index 0000000..b2532d6
+--- /dev/null
++++ b/cmake/TestLargeFiles.cmake
+@@ -0,0 +1,134 @@
++# - Define macro to check large file support
++#
++#  TEST_LARGE_FILES(VARIABLE)
++#
++#  VARIABLE will be set to true if off_t is 64 bits, and fseeko/ftello present.
++#  This macro will also defines the necessary variable enable large file support, for instance
++#  _LARGE_FILES
++#  _LARGEFILE_SOURCE
++#  _FILE_OFFSET_BITS 64
++#  OPJ_HAVE_FSEEKO
++#
++#  However, it is YOUR job to make sure these defines are set in a #cmakedefine so they
++#  end up in a config.h file that is included in your source if necessary!
++#
++#  Adapted from Gromacs project (http://www.gromacs.org/)
++#  by Julien Malik
++#
++
++macro(TEST_LARGE_FILES VARIABLE)
++    if(NOT DEFINED ${VARIABLE})
++
++        # On most platforms it is probably overkill to first test the flags for 64-bit off_t,
++        # and then separately fseeko. However, in the future we might have 128-bit filesystems
++        # (ZFS), so it might be dangerous to indiscriminately set e.g. _FILE_OFFSET_BITS=64.
++
++        message(STATUS "Checking for 64-bit off_t")
++
++        # First check without any special flags
++        try_compile(FILE64_OK "${PROJECT_BINARY_DIR}"
++                    "${PROJECT_SOURCE_DIR}/cmake/TestFileOffsetBits.c")
++        if(FILE64_OK)
++          message(STATUS "Checking for 64-bit off_t - present")
++       	endif()
++
++        if(NOT FILE64_OK)
++            # Test with _FILE_OFFSET_BITS=64
++            try_compile(FILE64_OK "${PROJECT_BINARY_DIR}"
++                        "${PROJECT_SOURCE_DIR}/cmake/TestFileOffsetBits.c"
++                        COMPILE_DEFINITIONS "-D_FILE_OFFSET_BITS=64" )
++            if(FILE64_OK)
++                message(STATUS "Checking for 64-bit off_t - present with _FILE_OFFSET_BITS=64")
++                set(_FILE_OFFSET_BITS 64)
++            endif()
++        endif()
++
++        if(NOT FILE64_OK)
++            # Test with _LARGE_FILES
++            try_compile(FILE64_OK "${PROJECT_BINARY_DIR}"
++                        "${PROJECT_SOURCE_DIR}/cmake/TestFileOffsetBits.c"
++                        COMPILE_DEFINITIONS "-D_LARGE_FILES" )
++            if(FILE64_OK)
++                message(STATUS "Checking for 64-bit off_t - present with _LARGE_FILES")
++                set(_LARGE_FILES 1)
++            endif()
++        endif()
++	
++        if(NOT FILE64_OK)
++            # Test with _LARGEFILE_SOURCE
++            try_compile(FILE64_OK "${PROJECT_BINARY_DIR}"
++                        "${PROJECT_SOURCE_DIR}/cmake/TestFileOffsetBits.c"
++                        COMPILE_DEFINITIONS "-D_LARGEFILE_SOURCE" )
++            if(FILE64_OK)
++                message(STATUS "Checking for 64-bit off_t - present with _LARGEFILE_SOURCE")
++                set(_LARGEFILE_SOURCE 1)
++            endif()
++        endif()
++
++
++        #if(NOT FILE64_OK)
++        #    # now check for Windows stuff
++        #    try_compile(FILE64_OK "${PROJECT_BINARY_DIR}"
++        #                "${PROJECT_SOURCE_DIR}/cmake/TestWindowsFSeek.c")
++        #    if(FILE64_OK)
++        #        message(STATUS "Checking for 64-bit off_t - present with _fseeki64")
++        #        set(HAVE__FSEEKI64 1)
++        #    endif()
++        #endif()
++
++        if(NOT FILE64_OK)
++            message(STATUS "Checking for 64-bit off_t - not present")
++        endif()
++
++        set(_FILE_OFFSET_BITS ${_FILE_OFFSET_BITS} CACHE INTERNAL "Result of test for needed _FILE_OFFSET_BITS=64")
++        set(_LARGE_FILES      ${_LARGE_FILES}      CACHE INTERNAL "Result of test for needed _LARGE_FILES")
++        set(_LARGEFILE_SOURCE ${_LARGEFILE_SOURCE} CACHE INTERNAL "Result of test for needed _LARGEFILE_SOURCE")
++
++        # Set the flags we might have determined to be required above
++        configure_file("${PROJECT_SOURCE_DIR}/cmake/TestLargeFiles.c.cmake.in"
++                       "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/TestLargeFiles.c")
++
++        message(STATUS "Checking for fseeko/ftello")
++
++	    # Test if ftello/fseeko are	available
++	    try_compile(FSEEKO_COMPILE_OK
++	                "${PROJECT_BINARY_DIR}"
++                    "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/TestLargeFiles.c")
++	
++	    if(FSEEKO_COMPILE_OK)
++            message(STATUS "Checking for fseeko/ftello - present")
++        endif()
++
++        if(NOT FSEEKO_COMPILE_OK)
++                # glibc 2.2 needs _LARGEFILE_SOURCE for fseeko (but not for 64-bit off_t...)
++                try_compile(FSEEKO_COMPILE_OK
++                            "${PROJECT_BINARY_DIR}"
++                            "${PROJECT_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/TestLargeFiles.c"
++                            COMPILE_DEFINITIONS "-D_LARGEFILE_SOURCE" )
++
++                if(FSEEKO_COMPILE_OK)
++                    message(STATUS "Checking for fseeko/ftello - present with _LARGEFILE_SOURCE")
++                    set(_LARGEFILE_SOURCE ${_LARGEFILE_SOURCE} CACHE INTERNAL "Result of test for needed _LARGEFILE_SOURCE")
++                endif()
++        endif()
++
++	    if(FSEEKO_COMPILE_OK)
++                set(HAVE_FSEEKO ON CACHE INTERNAL "Result of test for fseeko/ftello")
++        else()
++                message(STATUS "Checking for fseeko/ftello - not found")
++                set(HAVE_FSEEKO OFF CACHE INTERNAL "Result of test for fseeko/ftello")
++        endif()
++
++	    if(FILE64_OK AND FSEEKO_COMPILE_OK)
++                message(STATUS "Large File support - found")
++                set(${VARIABLE} ON CACHE INTERNAL "Result of test for large file support")
++        else()
++                message(STATUS "Large File support - not found")
++                set(${VARIABLE} OFF CACHE INTERNAL "Result of test for large file support")
++        endif()
++
++    endif()
++endmacro()
++
++
++
+diff --git a/cmake/dvdread-config.cmake b/cmake/dvdread-config.cmake
+new file mode 100644
+index 0000000..f0c962d
+--- /dev/null
++++ b/cmake/dvdread-config.cmake
+@@ -0,0 +1 @@
++include(${CMAKE_CURRENT_LIST_DIR}/dvdread.cmake)
+diff --git a/config.h.cm b/config.h.cm
+new file mode 100644
+index 0000000..6eb206b
+--- /dev/null
++++ b/config.h.cm
+@@ -0,0 +1,122 @@
++/* config.h.in.  Generated from configure.ac by autoheader.  */
++
++/* Define if building universal (internal helper macro) */
++#cmakedefine AC_APPLE_UNIVERSAL_BUILD 1
++
++/* Define to 1 if you have the <dirent.h> header file. */
++#cmakedefine HAVE_DIRENT_H 1
++
++/* Define to 1 if you have the <dlfcn.h> header file. */
++#cmakedefine HAVE_DLFCN_H 1
++
++/* Define to 1 if you have the <dvdcss/dvdcss.h> header file. */
++#cmakedefine HAVE_DVDCSS_DVDCSS_H 1
++
++/* Define to 1 if you have the `gettimeofday' function. */
++#cmakedefine HAVE_GETTIMEOFDAY 1
++
++/* Define to 1 if you have the <inttypes.h> header file. */
++#cmakedefine HAVE_INTTYPES_H 1
++
++/* Define to 1 if you have the <limits.h> header file. */
++#cmakedefine HAVE_LIMITS_H 1
++
++/* Define to 1 if you have the <memory.h> header file. */
++#cmakedefine HAVE_MEMORY_H 1
++
++/* Define to 1 if you have the <stdint.h> header file. */
++#cmakedefine HAVE_STDINT_H 1
++
++/* Define to 1 if you have the <stdlib.h> header file. */
++#cmakedefine HAVE_STDLIB_H 1
++
++/* Define to 1 if you have the <strings.h> header file. */
++#cmakedefine HAVE_STRINGS_H 1
++
++/* Define to 1 if you have the <string.h> header file. */
++#cmakedefine HAVE_STRING_H 1
++
++/* Define to 1 if you have the <sys/param.h> header file. */
++#cmakedefine HAVE_SYS_PARAM_H 1
++
++/* Define to 1 if you have the <sys/stat.h> header file. */
++#cmakedefine HAVE_SYS_STAT_H 1
++
++/* Define to 1 if you have the <sys/types.h> header file. */
++#cmakedefine HAVE_SYS_TYPES_H 1
++
++/* Define to 1 if you have the <unistd.h> header file. */
++#cmakedefine HAVE_UNISTD_H 1
++
++/* Define to the sub-directory where libtool stores uninstalled libraries. */
++#cmakedefine LT_OBJDIR "${LT_OBJDIR}"
++
++/* Name of package */
++#cmakedefine PACKAGE "${PACKAGE}"
++
++/* Define to the address where bug reports for this package should be sent. */
++#cmakedefine PACKAGE_BUGREPORT "${PACKAGE_BUGREPORT}"
++
++/* Define to the full name of this package. */
++#cmakedefine PACKAGE_NAME "${PACKAGE_NAME}"
++
++/* Define to the full name and version of this package. */
++#cmakedefine PACKAGE_STRING "${PACKAGE_STRING}"
++
++/* Define to the one symbol short name of this package. */
++#cmakedefine PACKAGE_TARNAME "${PACKAGE_TARNAME}"
++
++/* Define to the home page for this package. */
++#cmakedefine PACKAGE_URL "${PACKAGE_URL}"
++
++/* Define to the version of this package. */
++#cmakedefine PACKAGE_VERSION "${PACKAGE_VERSION}"
++
++/* Define to 1 if you have the ANSI C header files. */
++#cmakedefine STDC_HEADERS 1
++
++/* Unused parameter annotation */
++#cmakedefine UNUSED ${UNUSED}
++
++/* "Define to 1 to use builtin dlfcn" */
++#cmakedefine USING_BUILTIN_DLFCN 1
++
++/* Version number of package */
++#cmakedefine VERSION ${VERSION}
++
++/* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
++   significant byte first (like Motorola and SPARC, unlike Intel). */
++#if defined AC_APPLE_UNIVERSAL_BUILD
++# if defined __BIG_ENDIAN__
++#  define WORDS_BIGENDIAN 1
++# endif
++#else
++# ifndef WORDS_BIGENDIAN
++#  undef WORDS_BIGENDIAN
++# endif
++#endif
++
++/* Enable large inode numbers on Mac OS X 10.5.  */
++#ifndef _DARWIN_USE_64_BIT_INODE
++# define _DARWIN_USE_64_BIT_INODE 1
++#endif
++
++/* Number of bits in a file offset, on hosts where this is settable. */
++#cmakedefine _FILE_OFFSET_BITS ${_FILE_OFFSET_BITS}
++
++/* Define for large files, on AIX-style hosts. */
++#cmakedefine _LARGE_FILES 1
++
++#ifdef _MSC_VER
++#include <BaseTsd.h>
++typedef SSIZE_T ssize_t;
++#define inline __inline
++#define strcasecmp stricmp
++#define strncasecmp strnicmp
++
++#define S_ISDIR(m) ((m) & _S_IFDIR)
++#define S_ISREG(m) ((m) & _S_IFREG)
++#define S_ISBLK(m) 0
++#define S_ISCHR(m) 0
++
++#endif
+\ No newline at end of file
+diff --git a/msvc/contrib/dlfcn.c b/msvc/contrib/dlfcn.c
+index 15f9ec6..169c4b7 100644
+--- a/msvc/contrib/dlfcn.c
++++ b/msvc/contrib/dlfcn.c
+@@ -14,7 +14,6 @@
+ 
+ void *dlopen(const char *module_name, int mode)
+ {
+-    UINT em;
+     HINSTANCE dsoh;
+     char path[MAX_PATH], *p;
+     /* Load the module...
+@@ -34,7 +33,8 @@ void *dlopen(const char *module_name, int mode)
+      * same path or can be found in the usual places.  Failing that, let's
+      * let that dso look in the apache root.
+      */
+-    em = SetErrorMode(SEM_FAILCRITICALERRORS);
++#if !defined(WINAPI_FAMILY) || (WINAPI_FAMILY != WINAPI_FAMILY_APP)
++    UINT em = SetErrorMode(SEM_FAILCRITICALERRORS);
+     dsoh = LoadLibraryEx(path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+     if (!dsoh)
+     {
+@@ -43,6 +43,9 @@ void *dlopen(const char *module_name, int mode)
+     }
+     SetErrorMode(em);
+     SetLastError(0); // clear the last error
++#else
++    dsoh = LoadPackagedLibrary(path, 0);
++#endif
+     return (void *)dsoh;
+ }
+ 
+diff --git a/msvc/contrib/timer/timer.h b/msvc/contrib/timer/timer.h
+index 7df21e0..2729c18 100644
+--- a/msvc/contrib/timer/timer.h
++++ b/msvc/contrib/timer/timer.h
+@@ -1,5 +1,5 @@
+ #include <time.h>
+-#include <winsock.h>
++#include <winsock2.h>
+ #include "pthread.h"
+ 
+ #ifndef _ITIMER_
+diff --git a/msvc/include/inttypes.h b/msvc/include/inttypes.h
+index 4e1cbe1..30c6552 100644
+--- a/msvc/include/inttypes.h
++++ b/msvc/include/inttypes.h
+@@ -27,6 +27,6 @@
+ #ifndef _SYS_INTTYPES_H_
+ #define _SYS_INTTYPES_H_
+ 
+-#include <config.h>
++#include <stdint.h>
+ 
+ #endif
+diff --git a/msvc/include/pthreads/pthread.h b/msvc/include/pthreads/pthread.h
+index 9bb3de4..6abe614 100644
+--- a/msvc/include/pthreads/pthread.h
++++ b/msvc/include/pthreads/pthread.h
+@@ -142,7 +142,7 @@ struct timespec {
+ /*
+  * note: ETIMEDOUT is correctly defined in winsock.h
+  */
+-#include <winsock.h>
++#include <winsock2.h>
+ 
+ #ifdef NEED_ERRNO
+ #  include "need_errno.h"
+diff --git a/msvc/include/sys/time.h b/msvc/include/sys/time.h
+index f7973c1..f34f2d5 100644
+--- a/msvc/include/sys/time.h
++++ b/msvc/include/sys/time.h
+@@ -24,5 +24,12 @@
+  *              include the standard time header as well as our xine
+  *                              timer functions.
+  */
+-
++#pragma once
+ #include <time.h>
++
++#ifdef _MSC_VER
++#ifndef WIN32_LEAN_AND_MEAN
++#define WIN32_LEAN_AND_MEAN 
++#endif // !WIN32_LEAN_AND_MEAN
++#include <WinSock2.h>
++#endif
+\ No newline at end of file
+diff --git a/msvc/include/timer.h b/msvc/include/timer.h
+index 7df21e0..2729c18 100644
+--- a/msvc/include/timer.h
++++ b/msvc/include/timer.h
+@@ -1,5 +1,5 @@
+ #include <time.h>
+-#include <winsock.h>
++#include <winsock2.h>
+ #include "pthread.h"
+ 
+ #ifndef _ITIMER_
+diff --git a/msvc/include/unistd.h b/msvc/include/unistd.h
+index 620017c..325975d 100644
+--- a/msvc/include/unistd.h
++++ b/msvc/include/unistd.h
+@@ -29,6 +29,7 @@
+ #include <malloc.h>
+ #include <errno.h>
+ #include <direct.h>
++#include <io.h>
+ 
+ #include <config.h>
+ 
+diff --git a/src/dvd_reader.c b/src/dvd_reader.c
+index 3c5ec90..a8749f4 100644
+--- a/src/dvd_reader.c
++++ b/src/dvd_reader.c
+@@ -31,7 +31,9 @@
+ #include <string.h>         /* memcpy, strlen */
+ #include <unistd.h>         /* chdir, getcwd */
+ #include <limits.h>         /* PATH_MAX */
++#if HAVE_DIRENT_H
+ #include <dirent.h>         /* opendir, readdir */
++#endif
+ #include <ctype.h>          /* isalpha */
+ #ifndef WIN32
+ #include <paths.h>
+@@ -41,7 +43,7 @@
+ #ifdef WIN32
+ # ifndef HAVE_GETTIMEOFDAY
+    /* replacement gettimeofday implementation */
+-#  include <sys/timeb.h>
++# include <sys/timeb.h>
+ static inline int _private_gettimeofday( struct timeval *tv, void *tz )
+ {
+   struct timeb t;
+@@ -51,9 +53,12 @@ static inline int _private_gettimeofday( struct timeval *tv, void *tz )
+   return 0;
+ }
+ #  define gettimeofday(TV, TZ) _private_gettimeofday((TV), (TZ))
+-# endif
++#endif
+ # include <io.h> /* read() */
+ # define lseek64 _lseeki64
++#if defined(WINAPI_FAMILY) && (WINAPI_FAMILY == WINAPI_FAMILY_APP)
++#define getenv(x) NULL
++#endif
+ #endif
+ 
+ #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__bsdi__) || defined(__APPLE__)
+diff --git a/src/dvd_udf.c b/src/dvd_udf.c
+index 5eb3d2b..7e96405 100644
+--- a/src/dvd_udf.c
++++ b/src/dvd_udf.c
+@@ -32,8 +32,9 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
++#if HAVE_STRINGS_H
+ #include <strings.h>
+-
++#endif
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <unistd.h>
+diff --git a/src/dvdread/ifo_types.h b/src/dvdread/ifo_types.h
+index 33f0346..97e33ce 100644
+--- a/src/dvdread/ifo_types.h
++++ b/src/dvdread/ifo_types.h
+@@ -134,29 +134,29 @@ typedef struct {
+  * MultiChannel Extension
+  */
+ typedef struct {
+-  unsigned int zero1      : 7;
+-  unsigned int ach0_gme   : 1;
+-
+-  unsigned int zero2      : 7;
+-  unsigned int ach1_gme   : 1;
+-
+-  unsigned int zero3      : 4;
+-  unsigned int ach2_gv1e  : 1;
+-  unsigned int ach2_gv2e  : 1;
+-  unsigned int ach2_gm1e  : 1;
+-  unsigned int ach2_gm2e  : 1;
+-
+-  unsigned int zero4      : 4;
+-  unsigned int ach3_gv1e  : 1;
+-  unsigned int ach3_gv2e  : 1;
+-  unsigned int ach3_gmAe  : 1;
+-  unsigned int ach3_se2e  : 1;
+-
+-  unsigned int zero5      : 4;
+-  unsigned int ach4_gv1e  : 1;
+-  unsigned int ach4_gv2e  : 1;
+-  unsigned int ach4_gmBe  : 1;
+-  unsigned int ach4_seBe  : 1;
++  unsigned char zero1      : 7;
++  unsigned char ach0_gme   : 1;
++
++  unsigned char zero2      : 7;
++  unsigned char ach1_gme   : 1;
++
++  unsigned char zero3      : 4;
++  unsigned char ach2_gv1e  : 1;
++  unsigned char ach2_gv2e  : 1;
++  unsigned char ach2_gm1e  : 1;
++  unsigned char ach2_gm2e  : 1;
++
++  unsigned char zero4      : 4;
++  unsigned char ach3_gv1e  : 1;
++  unsigned char ach3_gv2e  : 1;
++  unsigned char ach3_gmAe  : 1;
++  unsigned char ach3_se2e  : 1;
++
++  unsigned char zero5      : 4;
++  unsigned char ach4_gv1e  : 1;
++  unsigned char ach4_gv2e  : 1;
++  unsigned char ach4_gmBe  : 1;
++  unsigned char ach4_seBe  : 1;
+   uint8_t zero6[19];
+ } ATTRIBUTE_PACKED multichannel_ext_t;
+ 
+@@ -209,16 +209,16 @@ typedef uint8_t pgc_program_map_t;
+  * Cell Playback Information.
+  */
+ typedef struct {
+-  unsigned int block_mode       : 2;
+-  unsigned int block_type       : 2;
+-  unsigned int seamless_play    : 1;
+-  unsigned int interleaved      : 1;
+-  unsigned int stc_discontinuity: 1;
+-  unsigned int seamless_angle   : 1;
++  unsigned char block_mode       : 2;
++  unsigned char block_type       : 2;
++  unsigned char seamless_play    : 1;
++  unsigned char interleaved      : 1;
++  unsigned char stc_discontinuity: 1;
++  unsigned char seamless_angle   : 1;
+ 
+-  unsigned int playback_mode    : 1;  /**< When set, enter StillMode after each VOBU */
+-  unsigned int restricted       : 1;  /**< ?? drop out of fastforward? */
+-  unsigned int unknown2         : 6;
++  unsigned char playback_mode    : 1;  /**< When set, enter StillMode after each VOBU */
++  unsigned char restricted       : 1;  /**< ?? drop out of fastforward? */
++  unsigned char unknown2         : 6;
+   uint8_t still_time;
+   uint8_t cell_cmd_nr;
+   dvd_time_t playback_time;
+@@ -249,35 +249,35 @@ typedef struct {
+  * User Operations.
+  */
+ typedef struct {
+-  unsigned int zero                           : 7; /* 25-31 */
+-  unsigned int video_pres_mode_change         : 1; /* 24 */
+-
+-  unsigned int karaoke_audio_pres_mode_change : 1; /* 23 */
+-  unsigned int angle_change                   : 1;
+-  unsigned int subpic_stream_change           : 1;
+-  unsigned int audio_stream_change            : 1;
+-  unsigned int pause_on                       : 1;
+-  unsigned int still_off                      : 1;
+-  unsigned int button_select_or_activate      : 1;
+-  unsigned int resume                         : 1; /* 16 */
+-
+-  unsigned int chapter_menu_call              : 1; /* 15 */
+-  unsigned int angle_menu_call                : 1;
+-  unsigned int audio_menu_call                : 1;
+-  unsigned int subpic_menu_call               : 1;
+-  unsigned int root_menu_call                 : 1;
+-  unsigned int title_menu_call                : 1;
+-  unsigned int backward_scan                  : 1;
+-  unsigned int forward_scan                   : 1; /* 8 */
+-
+-  unsigned int next_pg_search                 : 1; /* 7 */
+-  unsigned int prev_or_top_pg_search          : 1;
+-  unsigned int time_or_chapter_search         : 1;
+-  unsigned int go_up                          : 1;
+-  unsigned int stop                           : 1;
+-  unsigned int title_play                     : 1;
+-  unsigned int chapter_search_or_play         : 1;
+-  unsigned int title_or_time_play             : 1; /* 0 */
++  unsigned char zero                           : 7; /* 25-31 */
++  unsigned char video_pres_mode_change         : 1; /* 24 */
++
++  unsigned char karaoke_audio_pres_mode_change : 1; /* 23 */
++  unsigned char angle_change                   : 1;
++  unsigned char subpic_stream_change           : 1;
++  unsigned char audio_stream_change            : 1;
++  unsigned char pause_on                       : 1;
++  unsigned char still_off                      : 1;
++  unsigned char button_select_or_activate      : 1;
++  unsigned char resume                         : 1; /* 16 */
++
++  unsigned char chapter_menu_call              : 1; /* 15 */
++  unsigned char angle_menu_call                : 1;
++  unsigned char audio_menu_call                : 1;
++  unsigned char subpic_menu_call               : 1;
++  unsigned char root_menu_call                 : 1;
++  unsigned char title_menu_call                : 1;
++  unsigned char backward_scan                  : 1;
++  unsigned char forward_scan                   : 1; /* 8 */
++
++  unsigned char next_pg_search                 : 1; /* 7 */
++  unsigned char prev_or_top_pg_search          : 1;
++  unsigned char time_or_chapter_search         : 1;
++  unsigned char go_up                          : 1;
++  unsigned char stop                           : 1;
++  unsigned char title_play                     : 1;
++  unsigned char chapter_search_or_play         : 1;
++  unsigned char title_or_time_play             : 1; /* 0 */
+ } ATTRIBUTE_PACKED user_ops_t;
+ 
+ /**
+@@ -314,9 +314,9 @@ typedef struct {
+  */
+ typedef struct {
+   uint8_t  entry_id;
+-  unsigned int block_mode : 2;
+-  unsigned int block_type : 2;
+-  unsigned int unknown1   : 4;
++  unsigned char block_mode : 2;
++  unsigned char block_type : 2;
++  unsigned char unknown1   : 4;
+   uint16_t ptl_id_mask;
+   uint32_t pgc_start_byte;
+   pgc_t *pgc;
+@@ -442,14 +442,14 @@ typedef struct {
+ } ATTRIBUTE_PACKED vmgi_mat_t;
+ 
+ typedef struct {
+-  unsigned int zero_1                    : 1;
+-  unsigned int multi_or_random_pgc_title : 1; /* 0: one sequential pgc title */
+-  unsigned int jlc_exists_in_cell_cmd    : 1;
+-  unsigned int jlc_exists_in_prepost_cmd : 1;
+-  unsigned int jlc_exists_in_button_cmd  : 1;
+-  unsigned int jlc_exists_in_tt_dom      : 1;
+-  unsigned int chapter_search_or_play    : 1; /* UOP 1 */
+-  unsigned int title_or_time_play        : 1; /* UOP 0 */
++  unsigned char zero_1                    : 1;
++  unsigned char multi_or_random_pgc_title : 1; /* 0: one sequential pgc title */
++  unsigned char jlc_exists_in_cell_cmd    : 1;
++  unsigned char jlc_exists_in_prepost_cmd : 1;
++  unsigned char jlc_exists_in_button_cmd  : 1;
++  unsigned char jlc_exists_in_tt_dom      : 1;
++  unsigned char chapter_search_or_play    : 1; /* UOP 1 */
++  unsigned char title_or_time_play        : 1; /* UOP 0 */
+ } ATTRIBUTE_PACKED playback_type_t;
+ 
+ /**
+-- 
+2.10.2.windows.1
+

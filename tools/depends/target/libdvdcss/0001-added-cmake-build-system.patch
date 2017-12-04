@@ -1,0 +1,1010 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+new file mode 100644
+index 0000000..1e57e22
+--- /dev/null
++++ b/CMakeLists.txt
+@@ -0,0 +1,195 @@
++cmake_minimum_required(VERSION 3.1)
++set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
++
++project(dvdcss C)
++
++set(DVDCSS_VERSION_MAJOR 0)
++set(DVDCSS_VERSION_MINOR 19)
++set(DVDCSS_VERSION_MICRO 7)
++
++set(LIBDVDCSS_VERSION "${DVDCSS_VERSION_MAJOR}.${DVDCSS_VERSION_MINOR}.${DVDCSS_VERSION_MICRO}")
++
++include(CheckIncludeFiles)
++include(CheckSymbolExists)
++include(CheckTypeSize)
++include(CheckFileOffsetBits)
++
++check_include_files("IOKit/storage/IODVDMediaBSDClient.h" DARWIN_DVD_IOCTL)
++check_include_files("linux/cdrom.h" DVD_STRUCT_IN_LINUX_CDROM_H)
++check_include_files("linux/cdrom.h" HAVE_LINUX_CDROM_H)
++check_include_files("sys/cdio.h" DVD_STRUCT_IN_SYS_CDIO_H)
++check_include_files("sys/cdio.h" HAVE_SYS_CDIO_H)
++check_include_files("sys/dvdio.h" DVD_STRUCT_IN_SYS_DVDIO_H)
++check_include_files("sys/dvdio.h" HAVE_SYS_DVDIO_H)
++check_include_files("dlfcn.h" HAVE_DLFCN_H)
++check_include_files("dvd.h" HAVE_DVD_H)
++check_include_files("errno.h" HAVE_ERRNO_H)
++check_include_files("fcntl.h" HAVE_FCNTL_H)
++check_include_files("inttypes.h" HAVE_INTTYPES_H)
++check_include_files("io.h" HAVE_IO_H)
++check_include_files("memory.h" HAVE_MEMORY_H)
++check_include_files("pwd.h" HAVE_PWD_H)
++check_include_files("stdint.h" HAVE_STDINT_H)
++check_include_files("stdlib.h" HAVE_STDLIB_H)
++check_include_files("strings.h" HAVE_STRINGS_H)
++check_include_files("string.h" HAVE_STRING_H)
++check_include_files("sys/ioctl.h" HAVE_SYS_IOCTL_H)
++check_include_files("sys/param.h" HAVE_SYS_PARAM_H)
++check_include_files("sys/scsi/impl/uscsi.h" HAVE_SYS_SCSI_IMPL_USCSI_H)
++check_include_files("sys/scsi/scsi_types.h" HAVE_SYS_SCSI_SCSI_TYPES_H)
++check_include_files("sys/stat.h" HAVE_SYS_STAT_H)
++check_include_files("sys/types.h" HAVE_SYS_TYPES_H)
++check_include_files("sys/uio.h" HAVE_SYS_UIO_H)
++check_include_files("unistd.h" HAVE_UNISTD_H)
++check_include_files("windows.h" HAVE_WINDOWS_H)
++check_include_files("winioctl.h" HAVE_WINIOCTL_H)
++
++check_file_offset_bits()
++
++include(CheckFunctionExists)
++check_function_exists("mkdir" HAVE_MKDIR_F)
++if(NOT HAVE_MKDIR_F OR MSVC)
++  set(HAVE_BROKEN_MKDIR 1)
++endif()
++
++set(CMAKE_EXTRA_INCLUDE_FILES "sys/cdio.h")
++check_type_size(dvd_struct DVD_STRUCT)
++if(HAVE_DVD_STRUCT)
++  set(BSD_DVD_STRUCT 1)
++  set(LINUX_DVD_STRUCT 1)
++  set(OPENBSD_DVD_STRUCT 1)
++endif()
++set(HAVE_DVD_STRUCT)
++
++set(CMAKE_EXTRA_INCLUDE_FILES "sys/dvdio.h")
++check_type_size(dvd_struct DVD_STRUCT)
++if(HAVE_DVD_STRUCT)
++  set(BSD_DVD_STRUCT 1)
++  set(LINUX_DVD_STRUCT 1)
++endif()
++unset(HAVE_DVD_STRUCT)
++
++set(CMAKE_EXTRA_INCLUDE_FILES "linux/cdrom.h")
++check_type_size(dvd_struct DVD_STRUCT)
++if(HAVE_DVD_STRUCT)
++  set(LINUX_DVD_STRUCT 1)
++endif()
++unset(HAVE_DVD_STRUCT)
++
++check_type_size(size_t SIZE_T)
++if(NOT HAVE_SIZE_T)
++  if("${CMAKE_SIZEOF_VOID_P}" EQUAL 8)
++    set(size_t "uint64_t")
++  else("${CMAKE_SIZEOF_VOID_P}" EQUAL 8)
++    set(size_t   "uint32_t")
++  endif("${CMAKE_SIZEOF_VOID_P}" EQUAL 8)
++endif(NOT HAVE_SIZE_T)
++
++if(LINUX_DVD_STRUCT)
++  set(HAVE_LINUX_DVD_STRUCT 1)
++  if(OPENBSD_DVD_STRUCT)
++    set(HAVE_OPENBSD_DVD_STRUCT 1)
++  endif()
++elseif(BSD_DVD_STRUCT)
++  set(HAVE_BSD_DVD_STRUCT 1)
++endif()
++
++set(LT_OBJDIR "./libs")
++set(PACKAGE ${PROJECT_NAME})
++set(PACKAGE_NAME ${PROJECT_NAME})
++set(PACKAGE_STRING "${PROJECT_NAME} ${LIBDVDCSS_VERSION}")
++set(PACKAGE_TARNAME ${PROJECT_NAME})
++set(PACKAGE_URL "https://www.videolan.org/developers/libdvdcss.html")
++set(PACKAGE_VERSION ${LIBDVDCSS_VERSION})
++set(STDC_HEADERS 1)
++set(SUPPORT_ATTRIBUTE_VISIBILITY_DEFAULT 1)
++set(SUPPORT_FLAG_VISIBILITY 1)
++set(VERSION ${LIBDVDCSS_VERSION})
++set(_WIN32_IE "0x0600")
++
++configure_file(${CMAKE_SOURCE_DIR}/config.h.cm ${CMAKE_BINARY_DIR}/config.h)
++configure_file(${CMAKE_SOURCE_DIR}/src/dvdcss/version.h.in ${CMAKE_BINARY_DIR}/version.h @ONLY)
++unset(size_t)
++
++add_library(${PROJECT_NAME} 
++    src/common.h
++    src/css.c
++    src/css.h
++    src/csstables.h
++    src/device.c
++    src/device.h
++    src/error.c
++    src/ioctl.c
++    src/ioctl.h
++    src/libdvdcss.c
++    src/libdvdcss.h
++    src/dvdcss/dvdcss.h
++)
++add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
++target_include_directories(${PROJECT_NAME}
++  PRIVATE
++  $<BUILD_INTERFACE:.;src;src/dvdcss;${CMAKE_CURRENT_BINARY_DIR}>
++  INTERFACE
++  $<INSTALL_INTERFACE:include>
++)
++if(MSVC)
++  target_compile_definitions(${PROJECT_NAME}
++    PRIVATE 
++      LIBDVDCSS_EXPORTS 
++      _CRT_SECURE_NO_WARNINGS
++      PATH_MAX=1024
++  )
++  if(CMAKE_SYSTEM_NAME STREQUAL WindowsStore)
++    enable_language(CXX)
++    target_sources(${PROJECT_NAME} 
++      PRIVATE
++        ${CMAKE_SOURCE_DIR}/msvc/uwpapi.cpp
++    )
++    set_source_files_properties(${CMAKE_SOURCE_DIR}/msvc/uwpapi.cpp PROPERTIES COMPILE_FLAGS "/TP /ZW")
++  endif()
++endif()
++
++include(CMakePackageConfigHelpers)
++write_basic_package_version_file(
++  ${CMAKE_CURRENT_BINARY_DIR}/dvdcss-config-version.cmake
++  VERSION ${LIBDVDCSS_VERSION}
++  COMPATIBILITY AnyNewerVersion
++)
++
++install(TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}
++  RUNTIME DESTINATION bin
++  ARCHIVE DESTINATION lib
++  LIBRARY DESTINATION lib)
++
++
++install(FILES
++  ${CMAKE_CURRENT_SOURCE_DIR}/src/dvdcss/dvdcss.h
++  ${CMAKE_CURRENT_BINARY_DIR}/version.h
++  DESTINATION include/dvdcss)
++
++install(EXPORT ${PROJECT_NAME}
++  FILE
++    dvdcss.cmake
++  NAMESPACE
++    dvdcss::
++  DESTINATION
++    lib/cmake/dvdcss
++)
++install(
++  FILES
++    cmake/dvdcss-config.cmake
++    ${CMAKE_CURRENT_BINARY_DIR}/dvdcss-config-version.cmake
++  DESTINATION
++    lib/cmake/dvdcss
++)
++if(MSVC AND BUILD_SHARED_LIBS)
++  install(FILES 
++    $<TARGET_PDB_FILE:dvdcss>
++    DESTINATION lib
++  )
++endif()
++export(TARGETS dvdcss
++  FILE
++  ${CMAKE_CURRENT_BINARY_DIR}/dvdcss-config.cmake
++  NAMESPACE dvdcss::
++)
+diff --git a/cmake/CheckFileOffsetBits.c b/cmake/CheckFileOffsetBits.c
+new file mode 100644
+index 0000000..d948fec
+--- /dev/null
++++ b/cmake/CheckFileOffsetBits.c
+@@ -0,0 +1,14 @@
++#include <sys/types.h>
++
++#define KB ((off_t)1024)
++#define MB ((off_t)1024 * KB)
++#define GB ((off_t)1024 * MB)
++#define TB ((off_t)1024 * GB)
++int t2[(((64 * GB -1) % 671088649) == 268434537)
++       && (((TB - (64 * GB -1) + 255) % 1792151290) == 305159546)? 1: -1];
++
++int main()
++{
++  ;
++  return 0;
++}
+diff --git a/cmake/CheckFileOffsetBits.cmake b/cmake/CheckFileOffsetBits.cmake
+new file mode 100644
+index 0000000..b347c93
+--- /dev/null
++++ b/cmake/CheckFileOffsetBits.cmake
+@@ -0,0 +1,44 @@
++# - Check if _FILE_OFFSET_BITS macro needed for large files
++# CHECK_FILE_OFFSET_BITS ()
++#
++# The following variables may be set before calling this macro to
++# modify the way the check is run:
++#
++#  CMAKE_REQUIRED_FLAGS = string of compile command line flags
++#  CMAKE_REQUIRED_DEFINITIONS = list of macros to define (-DFOO=bar)
++#  CMAKE_REQUIRED_INCLUDES = list of include directories
++# Copyright (c) 2009, Michihiro NAKAJIMA
++#
++# Redistribution and use is allowed according to the terms of the BSD license.
++# For details see the accompanying COPYING-CMAKE-SCRIPTS file.
++
++#INCLUDE(CheckCXXSourceCompiles)
++
++GET_FILENAME_COMPONENT(_selfdir_CheckFileOffsetBits
++	 "${CMAKE_CURRENT_LIST_FILE}" PATH)
++
++MACRO (CHECK_FILE_OFFSET_BITS)
++  IF(NOT DEFINED _FILE_OFFSET_BITS)
++    MESSAGE(STATUS "Checking _FILE_OFFSET_BITS for large files")
++    TRY_COMPILE(__WITHOUT_FILE_OFFSET_BITS_64
++      ${CMAKE_CURRENT_BINARY_DIR}
++      ${_selfdir_CheckFileOffsetBits}/CheckFileOffsetBits.c
++      COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS})
++    IF(NOT __WITHOUT_FILE_OFFSET_BITS_64)
++      TRY_COMPILE(__WITH_FILE_OFFSET_BITS_64
++        ${CMAKE_CURRENT_BINARY_DIR}
++        ${_selfdir_CheckFileOffsetBits}/CheckFileOffsetBits.c
++        COMPILE_DEFINITIONS ${CMAKE_REQUIRED_DEFINITIONS} -D_FILE_OFFSET_BITS=64)
++    ENDIF(NOT __WITHOUT_FILE_OFFSET_BITS_64)
++
++    IF(NOT __WITHOUT_FILE_OFFSET_BITS_64 AND __WITH_FILE_OFFSET_BITS_64)
++      SET(_FILE_OFFSET_BITS 64 CACHE INTERNAL "_FILE_OFFSET_BITS macro needed for large files")
++      MESSAGE(STATUS "Checking _FILE_OFFSET_BITS for large files - needed")
++    ELSE(NOT __WITHOUT_FILE_OFFSET_BITS_64 AND __WITH_FILE_OFFSET_BITS_64)
++      SET(_FILE_OFFSET_BITS "" CACHE INTERNAL "_FILE_OFFSET_BITS macro needed for large files")
++      MESSAGE(STATUS "Checking _FILE_OFFSET_BITS for large files - not needed")
++    ENDIF(NOT __WITHOUT_FILE_OFFSET_BITS_64 AND __WITH_FILE_OFFSET_BITS_64)
++  ENDIF(NOT DEFINED _FILE_OFFSET_BITS)
++
++ENDMACRO (CHECK_FILE_OFFSET_BITS)
++
+diff --git a/cmake/dvdcss-config.cmake b/cmake/dvdcss-config.cmake
+new file mode 100644
+index 0000000..d1fde6e
+--- /dev/null
++++ b/cmake/dvdcss-config.cmake
+@@ -0,0 +1 @@
++include(${CMAKE_CURRENT_LIST_DIR}/dvdcss.cmake)
+diff --git a/config.h.cm b/config.h.cm
+new file mode 100644
+index 0000000..de1409b
+--- /dev/null
++++ b/config.h.cm
+@@ -0,0 +1,169 @@
++/* config.h.in.  Generated from configure.ac by autoheader.  */
++
++/* Have IOKit DVD IOCTL headers */
++#cmakedefine DARWIN_DVD_IOCTL 1
++
++/* Define if <linux/cdrom.h> defines DVD_STRUCT. */
++#cmakedefine DVD_STRUCT_IN_LINUX_CDROM_H 1
++
++/* Define if <sys/cdio.h> defines dvd_struct. */
++#cmakedefine DVD_STRUCT_IN_SYS_CDIO_H 1
++
++/* Define if <sys/dvdio.h> defines dvd_struct. */
++#cmakedefine DVD_STRUCT_IN_SYS_DVDIO_H 1
++
++/* Define if you have a broken mkdir */
++#cmakedefine HAVE_BROKEN_MKDIR 1
++
++/* Define if FreeBSD-like dvd_struct is defined. */
++#cmakedefine HAVE_BSD_DVD_STRUCT 1
++
++/* Define to 1 if you have the <dlfcn.h> header file. */
++#cmakedefine HAVE_DLFCN_H 1
++
++/* Define to 1 if you have the <dvd.h> header file. */
++#cmakedefine HAVE_DVD_H 1
++
++/* Define to 1 if you have the <errno.h> header file. */
++#cmakedefine HAVE_ERRNO_H 1
++
++/* Define to 1 if you have the <fcntl.h> header file. */
++#cmakedefine HAVE_FCNTL_H 1
++
++/* Define to 1 if you have the <inttypes.h> header file. */
++#cmakedefine HAVE_INTTYPES_H 1
++
++/* Define to 1 if you have the <io.h> header file. */
++#cmakedefine HAVE_IO_H 1
++
++/* Define to 1 if you have the <linux/cdrom.h> header file. */
++#cmakedefine HAVE_LINUX_CDROM_H 1
++
++/* Define if Linux-like dvd_struct is defined. */
++#cmakedefine HAVE_LINUX_DVD_STRUCT 1
++
++/* Define to 1 if you have the <memory.h> header file. */
++#cmakedefine HAVE_MEMORY_H 1
++
++/* Define if OpenBSD-like dvd_struct is defined. */
++#cmakedefine HAVE_OPENBSD_DVD_STRUCT 1
++
++/* Define to 1 if you have the <pwd.h> header file. */
++#cmakedefine HAVE_PWD_H 1
++
++/* Define to 1 if you have the <stdint.h> header file. */
++#cmakedefine HAVE_STDINT_H 1
++
++/* Define to 1 if you have the <stdlib.h> header file. */
++#cmakedefine HAVE_STDLIB_H 1
++
++/* Define to 1 if you have the <strings.h> header file. */
++#cmakedefine HAVE_STRINGS_H 1
++
++/* Define to 1 if you have the <string.h> header file. */
++#cmakedefine HAVE_STRING_H 1
++
++/* Define to 1 if you have the <sys/cdio.h> header file. */
++#cmakedefine HAVE_SYS_CDIO_H 1
++
++/* Define to 1 if you have the <sys/dvdio.h> header file. */
++#cmakedefine HAVE_SYS_DVDIO_H 1
++
++/* Define to 1 if you have the <sys/ioctl.h> header file. */
++#cmakedefine HAVE_SYS_IOCTL_H 1
++
++/* Define to 1 if you have the <sys/param.h> header file. */
++#cmakedefine HAVE_SYS_PARAM_H 1
++
++/* Define to 1 if you have the <sys/scsi/impl/uscsi.h> header file. */
++#cmakedefine HAVE_SYS_SCSI_IMPL_USCSI_H 1
++
++/* Define to 1 if you have the <sys/scsi/scsi_types.h> header file. */
++#cmakedefine HAVE_SYS_SCSI_SCSI_TYPES_H 1
++
++/* Define to 1 if you have the <sys/stat.h> header file. */
++#cmakedefine HAVE_SYS_STAT_H 1
++
++/* Define to 1 if you have the <sys/types.h> header file. */
++#cmakedefine HAVE_SYS_TYPES_H 1
++
++/* Define to 1 if you have the <sys/uio.h> header file. */
++#cmakedefine HAVE_SYS_UIO_H 1
++
++/* Define to 1 if you have the <unistd.h> header file. */
++#cmakedefine HAVE_UNISTD_H 1
++
++/* Define to 1 if you have the <windows.h> header file. */
++#cmakedefine HAVE_WINDOWS_H 1
++
++/* Define to 1 if you have the <winioctl.h> header file. */
++#cmakedefine HAVE_WINIOCTL_H 1
++
++/* Define to the sub-directory where libtool stores uninstalled libraries. */
++#cmakedefine LT_OBJDIR "${LT_OBJDIR}"
++
++/* Define O_BINARY if missing */
++#cmakedefine O_BINARY "${O_BINARY}"
++
++/* Name of package */
++#cmakedefine PACKAGE "${PACKAGE}"
++
++/* Define to the address where bug reports for this package should be sent. */
++#cmakedefine PACKAGE_BUGREPORT "${PACKAGE_BUGREPORT}"
++
++/* Define to the full name of this package. */
++#cmakedefine PACKAGE_NAME "${PACKAGE_NAME}"
++
++/* Define to the full name and version of this package. */
++#cmakedefine PACKAGE_STRING "${PACKAGE_STRING}"
++
++/* Define to the one symbol short name of this package. */
++#cmakedefine PACKAGE_TARNAME "${PACKAGE_TARNAME}"
++
++/* Define to the home page for this package. */
++#cmakedefine PACKAGE_URL "${PACKAGE_URL}"
++
++/* Define to the version of this package. */
++#cmakedefine PACKAGE_VERSION "${PACKAGE_VERSION}"
++
++/* Have userspace SCSI headers. */
++#cmakedefine SOLARIS_USCSI 1
++
++/* Define to 1 if you have the ANSI C header files. */
++#cmakedefine STDC_HEADERS 1
++
++/* Define this if the compiler supports __attribute__((visibility("default")))
++   */
++#cmakedefine SUPPORT_ATTRIBUTE_VISIBILITY_DEFAULT 1
++
++/* Define this if the compiler supports the -fvisibility flag */
++#cmakedefine SUPPORT_FLAG_VISIBILITY 1
++
++/* Version number of package */
++#cmakedefine VERSION "${VERSION}"
++
++/* Enable large inode numbers on Mac OS X 10.5.  */
++#ifndef _DARWIN_USE_64_BIT_INODE
++# define _DARWIN_USE_64_BIT_INODE 1
++#endif
++
++/* Number of bits in a file offset, on hosts where this is settable. */
++#cmakedefine _FILE_OFFSET_BITS ${_FILE_OFFSET_BITS}
++
++/* Define for large files, on AIX-style hosts. */
++#cmakedefine _LARGE_FILES 1
++
++/* Define to '0x0501' for IE 5.01 (and shell) APIs. */
++#cmakedefine _WIN32_IE ${_WIN32_IE}
++
++/* Define to empty if `const' does not conform to ANSI C. */
++/* #undef const */
++
++/* Define to `__inline__' or `__inline' if that's what the C compiler
++   calls it, or to nothing if 'inline' is not supported under any name.  */
++#ifndef __cplusplus
++#cmakedefine inline
++#endif
++
++/* Define to `unsigned int' if <sys/types.h> does not define. */
++#cmakedefine size_t ${size_t}
+diff --git a/msvc/uwpapi.cpp b/msvc/uwpapi.cpp
+new file mode 100644
+index 0000000..49cac71
+--- /dev/null
++++ b/msvc/uwpapi.cpp
+@@ -0,0 +1,115 @@
++
++#include <windows.h>
++#include <string>
++#include <locale>
++#include <map>
++
++using namespace Platform;
++using namespace Windows::ApplicationModel;
++using namespace Windows::System::UserProfile;
++using namespace Windows::Storage;
++using namespace Windows::Storage::Streams;
++using namespace Windows::Security::Cryptography;
++using namespace Windows::Security::Cryptography::Certificates;
++using namespace Windows::Foundation;
++
++std::wstring Utf8ToWide(const std::string &text)
++{
++  if (text.empty())
++    return L"";
++
++  int bufSize = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.c_str(), -1, NULL, 0);
++  if (bufSize == 0)
++    return L"";
++  wchar_t *converted = new wchar_t[bufSize];
++  if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.c_str(), -1, converted, bufSize) != bufSize)
++  {
++    delete[] converted;
++    return L"";
++  }
++
++  std::wstring Wret(converted);
++  delete[] converted;
++  return Wret;
++}
++
++std::string WideToUtf8(const std::wstring &text)
++{
++  if (text.empty())
++    return "";
++
++  int bufSize = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.c_str(), -1, NULL, 0, NULL, NULL);
++  if (bufSize == 0)
++    return "";
++  char * converted = new char[bufSize];
++  if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.c_str(), -1, converted, bufSize, NULL, NULL) != bufSize)
++  {
++    delete[] converted;
++    return "";
++  }
++
++  std::string ret(converted);
++  delete[] converted;
++
++  return ret;
++}
++
++extern "C" {
++    
++size_t uwp_Utf8ToW(const char* src, wchar_t* buffer, int maxlen)
++{
++  std::wstring converted = Utf8ToWide(std::string(src));
++  int len = min(converted.length(), maxlen - 1);
++  wcsncpy(buffer, converted.c_str(), len);
++  buffer[len] = '\0';
++
++  return len;
++}
++
++size_t uwp_cachepath(char *buffer, size_t cch)
++{
++  try
++  {
++    Platform::String^ path = Package::Current->InstalledLocation->Path;
++    path = Platform::String::Concat(path, "\\dvdcss");
++
++    std::string utf8path = WideToUtf8(std::wstring(path->Data()));
++
++    strncpy(buffer, utf8path.c_str(), cch);
++    return path->Length();
++  }
++  catch (Platform::Exception^)
++  {
++    return 0;
++  }
++}
++
++char* uwp_getenv(const char* n)
++{
++  static std::map<std::string, std::string> sEnvironment;
++
++  if (n == nullptr)
++    return nullptr;
++
++  std::string name(n);
++
++  // check key
++  if (!name.empty())
++  {
++    std::wstring Wname(Utf8ToWide(name));
++    Platform::String^ key = ref new Platform::String(Wname.c_str());
++
++    ApplicationDataContainer^ localSettings = ApplicationData::Current->LocalSettings;
++    auto values = localSettings->Values;
++
++    if (values->HasKey(key))
++    {
++      auto value = safe_cast<Platform::String^>(values->Lookup(key));
++      std::string result = WideToUtf8(std::wstring(value->Data()));
++      sEnvironment[name] = result;
++      return (char*)(sEnvironment[name].c_str());
++    }
++  }
++  return nullptr;
++}
++}
+diff --git a/src/device.c b/src/device.c
+index 1936b44..c7c24e7 100644
+--- a/src/device.c
++++ b/src/device.c
+@@ -89,6 +89,12 @@ static int win2k_seek  ( dvdcss_t, int );
+ static int win2k_read  ( dvdcss_t, void *, int );
+ static int win2k_readv ( dvdcss_t, const struct iovec *, int );
+ 
++#if defined(WINAPI_FAMILY) && (WINAPI_FAMILY == WINAPI_FAMILY_APP)
++extern char* uwp_getenv(const char* n);
++size_t uwp_cachepath(char *buffer, size_t cch);
++#define getenv uwp_getenv
++#endif
++
+ #elif defined( __OS2__ )
+ static int os2_open ( dvdcss_t, const char * );
+ #endif
+@@ -195,7 +201,8 @@ void dvdcss_check_device ( dvdcss_t dvdcss )
+         return;
+     }
+ 
+-#if defined( _WIN32 )
++#if defined( _WIN32 ) 
++#if !defined(WINAPI_FAMILY) || (WINAPI_FAMILY != WINAPI_FAMILY_APP)
+     drives = GetLogicalDrives();
+ 
+     for( i = 0; drives; i++ )
+@@ -227,6 +234,7 @@ void dvdcss_check_device ( dvdcss_t dvdcss )
+         dvdcss->psz_device = strdup( psz_device );
+         return;
+     }
++#endif
+ #elif defined( DARWIN_DVD_IOCTL )
+ 
+     kern_result = IOMasterPort( MACH_PORT_NULL, &master_port );
+@@ -416,7 +424,7 @@ int dvdcss_close_device ( dvdcss_t dvdcss )
+     {
+         CloseHandle( (HANDLE) dvdcss->i_fd );
+     }
+-    else
++    else if( !dvdcss->p_stream )
+ #endif
+     {
+         int i_ret = close( dvdcss->i_fd );
+@@ -450,6 +458,64 @@ static int libc_open ( dvdcss_t dvdcss, const char *psz_device )
+ }
+ 
+ #if defined( _WIN32 )
++#if defined(WINAPI_FAMILY) && (WINAPI_FAMILY == WINAPI_FAMILY_APP)
++HANDLE WINAPI CreateFileW(LPCWSTR lpFileName,
++  DWORD dwDesiredAccess,
++  DWORD dwShareMode,
++  LPSECURITY_ATTRIBUTES lpSecurityAttributes,
++  DWORD dwCreationDisposition,
++  DWORD dwFlagsAndAttributes,
++  HANDLE hTemplateFile)
++{
++  CREATEFILE2_EXTENDED_PARAMETERS createExParams;
++  createExParams.dwSize = sizeof(CREATEFILE2_EXTENDED_PARAMETERS);
++  createExParams.dwFileAttributes = dwFlagsAndAttributes & 0xFFFF;
++  createExParams.dwFileFlags = dwFlagsAndAttributes & 0xFFF00000;
++  createExParams.dwSecurityQosFlags = dwFlagsAndAttributes & 0x000F00000;
++  createExParams.lpSecurityAttributes = lpSecurityAttributes;
++  createExParams.hTemplateFile = hTemplateFile;
++  return CreateFile2(lpFileName, dwDesiredAccess, dwShareMode, dwCreationDisposition, &createExParams);
++}
++extern size_t uwp_Utf8ToW(const char* src, wchar_t* buffer, int maxlen);
++
++static int win2k_open(dvdcss_t dvdcss, const char *psz_device)
++{
++  char psz_dvd[7] = "\\\\.\\\0:";
++  psz_dvd[4] = psz_device[0];
++  wchar_t pathW[7];
++  uwp_Utf8ToW(psz_dvd, pathW, 8);
++
++  /* To work around an M$ bug in IOCTL_DVD_READ_STRUCTURE, we need read
++  * _and_ write access to the device (so we can make SCSI Pass Through
++  * Requests). Unfortunately this is only allowed if you have
++  * administrator privileges so we allow for a fallback method with
++  * only read access to the device (in this case ioctl_ReadCopyright()
++  * won't send back the right result).
++  * (See Microsoft Q241374: Read and Write Access Required for SCSI
++  * Pass Through Requests) */
++  dvdcss->i_fd = (int)
++    CreateFileW(pathW, GENERIC_READ | GENERIC_WRITE,
++      FILE_SHARE_READ | FILE_SHARE_WRITE,
++      NULL, OPEN_EXISTING,
++      FILE_FLAG_RANDOM_ACCESS, NULL);
++
++  if ((HANDLE)dvdcss->i_fd == INVALID_HANDLE_VALUE)
++    dvdcss->i_fd = (int)
++    CreateFileW(pathW, GENERIC_READ, FILE_SHARE_READ,
++      NULL, OPEN_EXISTING,
++      FILE_FLAG_RANDOM_ACCESS, NULL);
++
++  if ((HANDLE)dvdcss->i_fd == INVALID_HANDLE_VALUE)
++  {
++    print_error(dvdcss, "failed to open device %s", psz_device);
++    return -1;
++  }
++
++  dvdcss->i_pos = 0;
++
++  return 0;
++}
++#else
+ static int win2k_open ( dvdcss_t dvdcss, const char *psz_device )
+ {
+     char psz_dvd[7] = "\\\\.\\\0:";
+@@ -485,6 +551,7 @@ static int win2k_open ( dvdcss_t dvdcss, const char *psz_device )
+ 
+     return 0;
+ }
++#endif
+ #endif /* defined( _WIN32 ) */
+ 
+ #ifdef __OS2__
+diff --git a/src/ioctl.c b/src/ioctl.c
+index 07bcb0d..b0775de 100644
+--- a/src/ioctl.c
++++ b/src/ioctl.c
+@@ -111,7 +111,7 @@ static void OS2InitSDC( struct OS2_ExecSCSICmd *, int );
+  *****************************************************************************/
+ int ioctl_ReadCopyright( int i_fd, int i_layer, int *pi_copyright )
+ {
+-    int i_ret;
++    int i_ret = 0;
+ 
+ #if defined( HAVE_LINUX_DVD_STRUCT )
+     dvd_struct dvd = { 0 };
+@@ -169,6 +169,7 @@ int ioctl_ReadCopyright( int i_fd, int i_layer, int *pi_copyright )
+     *pi_copyright = dvdbs.copyrightProtectionSystemType;
+ 
+ #elif defined( _WIN32 )
++#if !defined(WINAPI_FAMILY) || (WINAPI_FAMILY != WINAPI_FAMILY_APP)
+     DWORD tmp;
+     SCSI_PASS_THROUGH_DIRECT sptd = { 0 };
+     uint8_t p_buffer[8];
+@@ -195,7 +196,7 @@ int ioctl_ReadCopyright( int i_fd, int i_layer, int *pi_copyright )
+     {
+         *pi_copyright = p_buffer[ 4 ];
+     }
+-
++#endif
+ #elif defined( __QNXNTO__ )
+ 
+     INIT_CPT( GPCMD_READ_DVD_STRUCTURE, 8 );
+@@ -231,7 +232,7 @@ int ioctl_ReadCopyright( int i_fd, int i_layer, int *pi_copyright )
+  *****************************************************************************/
+ int ioctl_ReadDiscKey( int i_fd, const int *pi_agid, uint8_t *p_key )
+ {
+-    int i_ret;
++    int i_ret = 0;
+ 
+ #if defined( HAVE_LINUX_DVD_STRUCT )
+     dvd_struct dvd = { 0 };
+@@ -305,6 +306,7 @@ int ioctl_ReadDiscKey( int i_fd, const int *pi_agid, uint8_t *p_key )
+     memcpy( p_key, dvdbs.discKeyStructures, DVD_DISCKEY_SIZE );
+ 
+ #elif defined( _WIN32 )
++#if !defined(WINAPI_FAMILY) || (WINAPI_FAMILY != WINAPI_FAMILY_APP)
+     DWORD tmp;
+     uint8_t buffer[DVD_DISK_KEY_LENGTH] = { 0 };
+     PDVD_COPY_PROTECT_KEY key = (PDVD_COPY_PROTECT_KEY) &buffer;
+@@ -323,7 +325,7 @@ int ioctl_ReadDiscKey( int i_fd, const int *pi_agid, uint8_t *p_key )
+     }
+ 
+     memcpy( p_key, key->KeyData, DVD_DISCKEY_SIZE );
+-
++#endif
+ #elif defined( __QNXNTO__ )
+ 
+     INIT_CPT( GPCMD_READ_DVD_STRUCTURE, DVD_DISCKEY_SIZE + 4 );
+@@ -364,7 +366,7 @@ int ioctl_ReadDiscKey( int i_fd, const int *pi_agid, uint8_t *p_key )
+  *****************************************************************************/
+ int ioctl_ReadTitleKey( int i_fd, const int *pi_agid, int i_pos, uint8_t *p_key )
+ {
+-    int i_ret;
++    int i_ret = 0;
+ 
+ #if defined( HAVE_LINUX_DVD_STRUCT )
+     dvd_authinfo auth_info = { 0 };
+@@ -437,6 +439,7 @@ int ioctl_ReadTitleKey( int i_fd, const int *pi_agid, int i_pos, uint8_t *p_key
+     memcpy( p_key, dvdbs.titleKeyValue, DVD_KEY_SIZE );
+ 
+ #elif defined( _WIN32 )
++#if !defined(WINAPI_FAMILY) || (WINAPI_FAMILY != WINAPI_FAMILY_APP)
+     DWORD tmp;
+     uint8_t buffer[DVD_TITLE_KEY_LENGTH] = { 0 };
+     PDVD_COPY_PROTECT_KEY key = (PDVD_COPY_PROTECT_KEY) &buffer;
+@@ -452,7 +455,7 @@ int ioctl_ReadTitleKey( int i_fd, const int *pi_agid, int i_pos, uint8_t *p_key
+             key->KeyLength, key, key->KeyLength, &tmp, NULL ) ? 0 : -1;
+ 
+     memcpy( p_key, key->KeyData, DVD_KEY_SIZE );
+-
++#endif
+ #elif defined( __QNXNTO__ )
+ 
+     INIT_CPT( GPCMD_REPORT_KEY, 12 );
+@@ -496,7 +499,7 @@ int ioctl_ReadTitleKey( int i_fd, const int *pi_agid, int i_pos, uint8_t *p_key
+  *****************************************************************************/
+ int ioctl_ReportAgid( int i_fd, int *pi_agid )
+ {
+-    int i_ret;
++    int i_ret = 0;
+ 
+ #if defined( HAVE_LINUX_DVD_STRUCT )
+     dvd_authinfo auth_info = { 0 };
+@@ -553,11 +556,12 @@ int ioctl_ReportAgid( int i_fd, int *pi_agid )
+     *pi_agid = dvdbs.grantID;
+ 
+ #elif defined( _WIN32 )
++#if !defined(WINAPI_FAMILY) || (WINAPI_FAMILY != WINAPI_FAMILY_APP)
+     DWORD tmp = 0;
+ 
+     i_ret = DeviceIoControl( (HANDLE) i_fd, IOCTL_DVD_START_SESSION, &tmp, 4,
+                              pi_agid, sizeof( *pi_agid ), &tmp, NULL ) ? 0 : -1;
+-
++#endif
+ #elif defined( __QNXNTO__ )
+ 
+     INIT_CPT( GPCMD_REPORT_KEY, 8 );
+@@ -591,7 +595,7 @@ int ioctl_ReportAgid( int i_fd, int *pi_agid )
+  *****************************************************************************/
+ int ioctl_ReportChallenge( int i_fd, const int *pi_agid, uint8_t *p_challenge )
+ {
+-    int i_ret;
++    int i_ret = 0;
+ 
+ #if defined( HAVE_LINUX_DVD_STRUCT )
+     dvd_authinfo auth_info = { 0 };
+@@ -647,6 +651,7 @@ int ioctl_ReportChallenge( int i_fd, const int *pi_agid, uint8_t *p_challenge )
+     memcpy( p_challenge, dvdbs.challengeKeyValue, DVD_CHALLENGE_SIZE );
+ 
+ #elif defined( _WIN32 )
++#if !defined(WINAPI_FAMILY) || (WINAPI_FAMILY != WINAPI_FAMILY_APP)
+     DWORD tmp;
+     uint8_t buffer[DVD_CHALLENGE_KEY_LENGTH] = { 0 };
+     PDVD_COPY_PROTECT_KEY key = (PDVD_COPY_PROTECT_KEY) &buffer;
+@@ -665,7 +670,7 @@ int ioctl_ReportChallenge( int i_fd, const int *pi_agid, uint8_t *p_challenge )
+     }
+ 
+     memcpy( p_challenge, key->KeyData, DVD_CHALLENGE_SIZE );
+-
++#endif
+ #elif defined( __QNXNTO__ )
+ 
+     INIT_CPT( GPCMD_REPORT_KEY, 16 );
+@@ -699,7 +704,7 @@ int ioctl_ReportChallenge( int i_fd, const int *pi_agid, uint8_t *p_challenge )
+  *****************************************************************************/
+ int ioctl_ReportASF( int i_fd, int *pi_asf )
+ {
+-    int i_ret;
++    int i_ret = 0;
+ 
+ #if defined( HAVE_LINUX_DVD_STRUCT )
+     dvd_authinfo auth_info = { 0 };
+@@ -753,6 +758,7 @@ int ioctl_ReportASF( int i_fd, int *pi_asf )
+     *pi_asf = dvdbs.successFlag;
+ 
+ #elif defined( _WIN32 )
++#if !defined(WINAPI_FAMILY) || (WINAPI_FAMILY != WINAPI_FAMILY_APP)
+     DWORD tmp;
+     uint8_t buffer[DVD_ASF_LENGTH] = { 0 };
+     PDVD_COPY_PROTECT_KEY key = (PDVD_COPY_PROTECT_KEY) &buffer;
+@@ -775,7 +781,7 @@ int ioctl_ReportASF( int i_fd, int *pi_asf )
+ 
+     keyData = (PDVD_ASF)key->KeyData;
+     *pi_asf = keyData->SuccessFlag;
+-
++#endif
+ #elif defined( __QNXNTO__ )
+ 
+     INIT_CPT( GPCMD_REPORT_KEY, 8 );
+@@ -809,7 +815,7 @@ int ioctl_ReportASF( int i_fd, int *pi_asf )
+  *****************************************************************************/
+ int ioctl_ReportKey1( int i_fd, const int *pi_agid, uint8_t *p_key )
+ {
+-    int i_ret;
++    int i_ret = 0;
+ 
+ #if defined( HAVE_LINUX_DVD_STRUCT )
+     dvd_authinfo auth_info = { 0 };
+@@ -865,6 +871,7 @@ int ioctl_ReportKey1( int i_fd, const int *pi_agid, uint8_t *p_key )
+     memcpy( p_key, dvdbs.key1Value, DVD_KEY_SIZE );
+ 
+ #elif defined( _WIN32 )
++#if !defined(WINAPI_FAMILY) || (WINAPI_FAMILY != WINAPI_FAMILY_APP)
+     DWORD tmp;
+     uint8_t buffer[DVD_BUS_KEY_LENGTH] = { 0 };
+     PDVD_COPY_PROTECT_KEY key = (PDVD_COPY_PROTECT_KEY) &buffer;
+@@ -878,7 +885,7 @@ int ioctl_ReportKey1( int i_fd, const int *pi_agid, uint8_t *p_key )
+             key->KeyLength, key, key->KeyLength, &tmp, NULL ) ? 0 : -1;
+ 
+     memcpy( p_key, key->KeyData, DVD_KEY_SIZE );
+-
++#endif
+ #elif defined( __QNXNTO__ )
+ 
+     INIT_CPT( GPCMD_REPORT_KEY, 12 );
+@@ -912,7 +919,7 @@ int ioctl_ReportKey1( int i_fd, const int *pi_agid, uint8_t *p_key )
+  *****************************************************************************/
+ int ioctl_InvalidateAgid( int i_fd, int *pi_agid )
+ {
+-    int i_ret;
++    int i_ret = 0;
+ 
+ #if defined( HAVE_LINUX_DVD_STRUCT )
+     dvd_authinfo auth_info = { 0 };
+@@ -958,11 +965,12 @@ int ioctl_InvalidateAgid( int i_fd, int *pi_agid )
+     i_ret = ioctl( i_fd, DKIOCDVDSENDKEY, &dvd );
+ 
+ #elif defined( _WIN32 )
++#if !defined(WINAPI_FAMILY) || (WINAPI_FAMILY != WINAPI_FAMILY_APP)
+     DWORD tmp;
+ 
+     i_ret = DeviceIoControl( (HANDLE) i_fd, IOCTL_DVD_END_SESSION,
+                 pi_agid, sizeof( *pi_agid ), NULL, 0, &tmp, NULL ) ? 0 : -1;
+-
++#endif
+ #elif defined( __QNXNTO__ )
+ 
+     INIT_CPT( GPCMD_REPORT_KEY, 0 );
+@@ -995,7 +1003,7 @@ int ioctl_InvalidateAgid( int i_fd, int *pi_agid )
+  *****************************************************************************/
+ int ioctl_SendChallenge( int i_fd, const int *pi_agid, const uint8_t *p_challenge )
+ {
+-    int i_ret;
++    int i_ret = 0;
+ 
+ #if defined( HAVE_LINUX_DVD_STRUCT )
+     dvd_authinfo auth_info = { 0 };
+@@ -1055,6 +1063,7 @@ int ioctl_SendChallenge( int i_fd, const int *pi_agid, const uint8_t *p_challeng
+     i_ret = ioctl( i_fd, DKIOCDVDSENDKEY, &dvd );
+ 
+ #elif defined( _WIN32 )
++#if !defined(WINAPI_FAMILY) || (WINAPI_FAMILY != WINAPI_FAMILY_APP)
+     DWORD tmp;
+     uint8_t buffer[DVD_CHALLENGE_KEY_LENGTH] = { 0 };
+     PDVD_COPY_PROTECT_KEY key = (PDVD_COPY_PROTECT_KEY) &buffer;
+@@ -1068,7 +1077,7 @@ int ioctl_SendChallenge( int i_fd, const int *pi_agid, const uint8_t *p_challeng
+ 
+     i_ret = DeviceIoControl( (HANDLE) i_fd, IOCTL_DVD_SEND_KEY, key,
+              key->KeyLength, key, key->KeyLength, &tmp, NULL ) ? 0 : -1;
+-
++#endif
+ #elif defined( __QNXNTO__ )
+ 
+     INIT_CPT( GPCMD_SEND_KEY, 16 );
+@@ -1104,7 +1113,7 @@ int ioctl_SendChallenge( int i_fd, const int *pi_agid, const uint8_t *p_challeng
+  *****************************************************************************/
+ int ioctl_SendKey2( int i_fd, const int *pi_agid, const uint8_t *p_key )
+ {
+-    int i_ret;
++    int i_ret = 0;
+ 
+ #if defined( HAVE_LINUX_DVD_STRUCT )
+     dvd_authinfo auth_info = { 0 };
+@@ -1164,6 +1173,7 @@ int ioctl_SendKey2( int i_fd, const int *pi_agid, const uint8_t *p_key )
+     i_ret = ioctl( i_fd, DKIOCDVDSENDKEY, &dvd );
+ 
+ #elif defined( _WIN32 )
++#if !defined(WINAPI_FAMILY) || (WINAPI_FAMILY != WINAPI_FAMILY_APP)
+     DWORD tmp;
+     uint8_t buffer[DVD_BUS_KEY_LENGTH] = { 0 };
+     PDVD_COPY_PROTECT_KEY key = (PDVD_COPY_PROTECT_KEY) &buffer;
+@@ -1177,7 +1187,7 @@ int ioctl_SendKey2( int i_fd, const int *pi_agid, const uint8_t *p_key )
+ 
+     i_ret = DeviceIoControl( (HANDLE) i_fd, IOCTL_DVD_SEND_KEY, key,
+              key->KeyLength, key, key->KeyLength, &tmp, NULL ) ? 0 : -1;
+-
++#endif
+ #elif defined( __QNXNTO__ )
+ 
+     INIT_CPT( GPCMD_SEND_KEY, 12 );
+@@ -1213,7 +1223,7 @@ int ioctl_SendKey2( int i_fd, const int *pi_agid, const uint8_t *p_key )
+  *****************************************************************************/
+ int ioctl_ReportRPC( int i_fd, int *p_type, int *p_mask, int *p_scheme )
+ {
+-    int i_ret;
++    int i_ret = 0;
+ 
+ #if defined( HAVE_LINUX_DVD_STRUCT ) && defined( DVD_LU_SEND_RPC_STATE )
+     dvd_authinfo auth_info = { 0 };
+@@ -1281,6 +1291,7 @@ int ioctl_ReportRPC( int i_fd, int *p_type, int *p_mask, int *p_scheme )
+     *p_scheme = dvdbs.rpcScheme;
+ 
+ #elif defined( _WIN32 )
++#if !defined(WINAPI_FAMILY) || (WINAPI_FAMILY != WINAPI_FAMILY_APP)
+     DWORD tmp;
+     uint8_t buffer[DVD_RPC_KEY_LENGTH] = { 0 };
+     PDVD_COPY_PROTECT_KEY key = (PDVD_COPY_PROTECT_KEY) &buffer;
+@@ -1302,7 +1313,7 @@ int ioctl_ReportRPC( int i_fd, int *p_type, int *p_mask, int *p_scheme )
+     *p_type = keyData->TypeCode;
+     *p_mask = keyData->RegionMask;
+     *p_scheme = keyData->RpcScheme;
+-
++#endif
+ #elif defined( __QNXNTO__ )
+ 
+     INIT_CPT( GPCMD_REPORT_KEY, 8 );
+diff --git a/src/libdvdcss.c b/src/libdvdcss.c
+index d09d2b3..bc64d25 100644
+--- a/src/libdvdcss.c
++++ b/src/libdvdcss.c
+@@ -143,6 +143,11 @@
+ #define MANUFACTURING_DATE_OFFSET 813
+ #define MANUFACTURING_DATE_LENGTH  16
+ 
++#if defined(WINAPI_FAMILY) && (WINAPI_FAMILY == WINAPI_FAMILY_APP)
++extern char* uwp_getenv(const char* n);
++size_t uwp_cachepath(char *buffer, size_t cch);
++#define getenv uwp_getenv
++#endif
+ 
+ static dvdcss_t dvdcss_open_common ( const char *psz_target, void *p_stream,
+                                      dvdcss_stream_cb *p_stream_cb );
+@@ -205,11 +210,14 @@ static int set_cache_directory( dvdcss_t dvdcss )
+     {
+ #ifdef _WIN32
+         char psz_home[PATH_MAX];
+-
++#if defined(WINAPI_FAMILY) && (WINAPI_FAMILY == WINAPI_FAMILY_APP)
++        if (uwp_cachepath(psz_home, PATH_MAX))
++#else
+         /* Cache our keys in
+          * C:\Documents and Settings\$USER\Application Data\dvdcss\ */
+         if (SHGetFolderPathA (NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE,
+                               NULL, SHGFP_TYPE_CURRENT, psz_home ) == S_OK)
++#endif
+         {
+             snprintf( dvdcss->psz_cachefile, PATH_MAX, "%s\\dvdcss", psz_home );
+             dvdcss->psz_cachefile[PATH_MAX - 1] = '\0';
+-- 
+2.10.2.windows.1
+

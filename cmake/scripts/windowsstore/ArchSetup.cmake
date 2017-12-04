@@ -116,3 +116,5 @@ endif()
 # -------- Build options ---------
 
 set(ENABLE_OPTICAL OFF CACHE BOOL "" FORCE)
+
+include(${CMAKE_SOURCE_DIR}/cmake/scripts/windows/patch.cmake)
