@@ -14,7 +14,7 @@ SET build64=no
 SET buildArm=no
 SET vcarch=x86
 SET msys2=msys64
-SET tools=mingw
+SET tools=msvc
 SET win10=no
 SET UWPSDKVer=
 
