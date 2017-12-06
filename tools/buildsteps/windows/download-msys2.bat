@@ -28,8 +28,6 @@ POPD
 
 set msysver=20161025
 set msys2=msys64
-set build32=no
-set build64=no
 set instdir=%WORKSPACE%\project\BuildDependencies
 set msyspackages=diffutils gcc make patch perl tar yasm
 set mingwpackages=dlfcn gcc gcc-libs gettext libiconv libgpg-error libpng yasm nettle libtasn1 openssl xz
@@ -49,11 +47,7 @@ if "%usemirror%"=="yes" (
 set downloaddir=%instdir%\downloads2
 set unpack_exe=%instdir%\..\Win32BuildSetup\tools\7z\7za.exe
 
-for %%b in (%1, %2, %3) do (
-  if %%b==build64 (
-    set build32=no
-    set build64=yes
-  )
+for %%b in (%*) do (
   if %%b==sh (set opt=sh)
 )
 
@@ -279,49 +273,7 @@ if exist %instdir%\%msys2%\usr\bin\make.exe GOTO getmingw32
         )
 
 :getmingw32
-if %build32%==yes (
-if exist "%instdir%\%msys2%\etc\pac-mingw32-old.pk" del "%instdir%\%msys2%\etc\pac-mingw32-old.pk"
-if exist "%instdir%\%msys2%\etc\pac-mingw32-new.pk" ren "%instdir%\%msys2%\etc\pac-mingw32-new.pk" pac-mingw32-old.pk
-
-for %%i in (%mingwpackages%) do echo.mingw-w64-i686-%%i>>%instdir%\%msys2%\etc\pac-mingw32-new.pk
-
-if exist %instdir%\%msys2%\mingw32\bin\gcc.exe GOTO getmingw64
-    echo.-------------------------------------------------------------------------------
-    echo.install 32 bit compiler
-    echo.-------------------------------------------------------------------------------
-    if exist %instdir%\mingw32.sh del %instdir%\mingw32.sh
-    (
-        echo.echo -ne "\033]0;install 32 bit compiler\007"
-        echo.pacman --noconfirm -S $(cat /etc/pac-mingw32-new.pk ^| sed -e 's#\\##'^)
-        echo.sleep ^3
-        echo.exit
-        )>>%instdir%\mingw32.sh
-    %sh% --login %instdir%\mingw32.sh
-    del %instdir%\mingw32.sh
-    )
-
 :getmingw64
-if %build64%==yes (
-if exist "%instdir%\%msys2%\etc\pac-mingw64-old.pk" del "%instdir%\%msys2%\etc\pac-mingw64-old.pk"
-if exist "%instdir%\%msys2%\etc\pac-mingw64-new.pk" ren "%instdir%\%msys2%\etc\pac-mingw64-new.pk" pac-mingw64-old.pk
-
-for %%i in (%mingwpackages%) do echo.mingw-w64-x86_64-%%i>>%instdir%\%msys2%\etc\pac-mingw64-new.pk
-
-if exist %instdir%\%msys2%\mingw64\bin\gcc.exe GOTO rebase2
-    echo.-------------------------------------------------------------------------------
-    echo.install 64 bit compiler
-    echo.-------------------------------------------------------------------------------
-    if exist %instdir%\mingw64.sh del %instdir%\mingw64.sh
-        (
-        echo.echo -ne "\033]0;install 64 bit compiler\007"
-        echo.pacman --noconfirm -S $(cat /etc/pac-mingw64-new.pk ^| sed -e 's#\\##'^)
-        echo.sleep ^3
-        echo.exit
-        )>>%instdir%\mingw64.sh
-    %sh% --login %instdir%\mingw64.sh
-    del %instdir%\mingw64.sh
-    )
-
 :rebase2
 if %msys2%==msys32 (
     echo.-------------------------------------------------------------------------------
@@ -334,32 +286,6 @@ if %msys2%==msys32 (
 echo.-------------------------------------------------------------------------------
 echo.check for dynamic libs
 echo.-------------------------------------------------------------------------------
-
-Setlocal EnableDelayedExpansion
-
-if %build32%==yes (
-    for /R "%instdir%\%msys2%\mingw32" %%C in (*.dll.a) do (
-        set file=%%C
-        set name=!file:~0,-6!
-        if exist %%C.dyn del %%C.dyn
-        if exist !name!.a (
-            %instdir%\%msys2%\usr\bin\mv %%C %%C.dyn
-            )
-        )
-    )
-
-if %build64%==yes (
-    for /R "%instdir%\%msys2%\mingw64" %%C in (*.dll.a) do (
-        set file=%%C
-        set name=!file:~0,-6!
-        if exist %%C.dyn del %%C.dyn
-        if exist !name!.a (
-            %instdir%\%msys2%\usr\bin\mv %%C %%C.dyn
-            )
-        )
-    )
-
-Setlocal DisableDelayedExpansion
 
 ::------------------------------------------------------------------
 :: write config profiles:
@@ -464,35 +390,7 @@ if exist %instdir%\locals\x64\etc\profile.local GOTO loginProfile
     )
 
 :loginProfile
-if %build32%==no GOTO loginProfile64
-    %instdir%\%msys2%\usr\bin\grep -q -e 'profile.local' %instdir%\%msys2%\etc\profile || (
-        echo -------------------------------------------------------------------------------
-        echo.- write default profile [32 bit]
-        echo -------------------------------------------------------------------------------
-        (
-            echo.
-            echo.if [[ -z "$MSYSTEM" ^&^& -f /local32/etc/profile.local ]]; then
-            echo.       source /local32/etc/profile.local
-            echo.fi
-            )>>%instdir%\%msys2%\etc\profile.
-    )
-
-    GOTO loadGasPreproc
-
 :loginProfile64
-if %build64%==no GOTO loadGasPreproc
-    %instdir%\%msys2%\usr\bin\grep -q -e 'profile.local' %instdir%\%msys2%\etc\profile || (
-        echo -------------------------------------------------------------------------------
-        echo.- write default profile [64 bit]
-        echo -------------------------------------------------------------------------------
-        (
-            echo.
-            echo.if [[ -z "$MSYSTEM" ^&^& -f /local64/etc/profile.local ]]; then
-            echo.       source /local64/etc/profile.local
-            echo.fi
-            )>>%instdir%\%msys2%\etc\profile.
-    )
-
 :loadGasPreproc
 set gaspreprocfile=gas-preprocessor.tar.gz
 if exist %downloaddir%\%gaspreprocfile% goto extractGasPreproc
