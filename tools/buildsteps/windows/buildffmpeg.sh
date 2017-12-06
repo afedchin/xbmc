@@ -107,10 +107,10 @@ if [ "$TOOLS" = "msvc" ]; then
     do_addOption "--enable-cross-compile"
     extra_cflags=$extra_cflags" -MD -DWINAPI_FAMILY=WINAPI_FAMILY_APP -D_WIN32_WINNT=0x0A00"
     extra_ldflags=$extra_ldflags" -APPCONTAINER WindowsApp.lib"
-  else
-    # compile ffmpeg with debug symbols
-    do_removeOption "--disable-debug"
-    do_addOption "--enable-debug"
+  fi
+
+  # compile ffmpeg with debug symbols
+  if do_checkForOptions "--enable-debug"; then
     extra_cflags=$extra_cflags" -MDd"
     extra_ldflags=$extra_ldflags" -NODEFAULTLIB:libcmt"
   fi
