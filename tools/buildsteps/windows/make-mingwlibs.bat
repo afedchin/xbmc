@@ -18,7 +18,7 @@ SET tools=msvc
 SET win10=no
 SET UWPSDKVer=
 
-FOR %%b in (%1, %2, %3, %4) DO (
+FOR %%b in (%1, %2, %3, %4, %5, %6, %7, %8) DO (
   IF %%b==noprompt SET PROMPTLEVEL=noprompt
   IF %%b==clean SET BUILDMODE=clean
   IF %%b==noclean SET BUILDMODE=noclean
