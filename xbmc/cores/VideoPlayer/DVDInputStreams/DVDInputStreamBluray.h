@@ -9,17 +9,16 @@
 #pragma once
 
 #include "DVDInputStream.h"
+#include "DVDInputStreamFile.h"
 #include <list>
 #include <memory>
+#include <queue>
 
 extern "C"
 {
 #include <libbluray/bluray.h>
-#include <libbluray/bluray-version.h>
 #include <libbluray/keys.h>
 #include <libbluray/overlay.h>
-#include <libbluray/player_settings.h>
-#include "DVDInputStreamFile.h"
 }
 
 #define MAX_PLAYLIST_ID 99999
@@ -45,6 +44,7 @@ class CDVDInputStreamBluray
   , public CDVDInputStream::IChapter
   , public CDVDInputStream::IPosTime
   , public CDVDInputStream::IMenus
+  , public CDVDInputStream::IExtensionStream
 {
 public:
   CDVDInputStreamBluray() = delete;
@@ -121,6 +121,14 @@ public:
 
   void ProcessEvent();
 
+  /* IExtensionStream */
+  bool HasExtension() override;
+  bool AreEyesFlipped() override;
+  struct DemuxPacket* ReadDemux() override;
+  struct AVStream* GetAVStream() override;
+  void DisableExtension() override;
+  bool NeedMoreData() override;
+
 protected:
   struct SPlane;
 
@@ -164,10 +172,50 @@ protected:
   struct bd_argb_buffer_s m_argb;
 #endif
 
+private:
+  class CExtensionStreamReader final
+  {
+  public:
+    CExtensionStreamReader(BLURAY* bd, int nSubPathIndex);
+    ~CExtensionStreamReader();
+
+    void Push(int clip);
+    void Clear();
+    void OpenNextStream();
+    struct DemuxPacket* ReadDemux() const;
+    bool SeekTime(double time) const;
+    struct AVStream* GetAVStream();
+
   private:
-    bool OpenStream(CFileItem &item);
-    void SetupPlayerSettings();
-    void FreeTitleInfo();
-    std::unique_ptr<CDVDInputStreamFile> m_pstream = nullptr;
-    std::string m_rootPath;
+    bool OpenClip(const std::string& strClipName);
+    void Dispose();
+    static double ConvertTimestamp(int64_t pts, int den, int num);
+
+    bool m_bOpened = false;
+    int m_nAVStreamIndex = -1;
+    int m_nSubPathIndex = -1;
+    int m_nClip = -1;
+
+    BLURAY* m_bd = nullptr;
+    std::queue<int> m_clipQueue;
+    struct bd_file_s* m_bd_file = nullptr;
+
+    struct AVIOContext* m_ioContext = nullptr;
+    struct AVFormatContext* m_pFormatContext = nullptr;
+  };
+
+  bool OpenStream(CFileItem &item);
+  void SetupPlayerSettings();
+  void FreeTitleInfo();
+
+  bool ProcessPlaylist(int playitem);
+
+  std::unique_ptr<CDVDInputStreamFile> m_pstream = nullptr;
+  std::string m_rootPath;
+  int m_nTitles = -1;
+
+  // extension related members
+  std::unique_ptr<CExtensionStreamReader> m_pExtensionReader = nullptr;
+  bool m_bExtensionDisabled = false;
+  bool m_bFlipEyes = false;
 };
