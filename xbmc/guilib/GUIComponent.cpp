@@ -43,6 +43,9 @@ void CGUIComponent::Init()
   //! @todo This is something we need to change
   m_pWindowManager->AddMsgTarget(m_stereoscopicsManager.get());
 
+  m_guiAudioManager->Enable(true);
+  m_guiAudioManager->Load();
+
   CServiceBroker::RegisterGUI(this);
 }
 
