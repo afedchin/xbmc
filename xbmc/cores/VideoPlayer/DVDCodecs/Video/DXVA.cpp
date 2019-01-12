@@ -26,6 +26,10 @@
 #include "utils/StringUtils.h"
 #include "utils/SystemInfo.h"
 
+extern "C" {
+#include <libavutil/mem.h>
+}
+
 #include <dxva.h>
 #include <d3d11.h>
 #include <Initguid.h>
@@ -444,8 +448,8 @@ bool CDXVAContext::GetFormatAndConfig(AVCodecContext* avctx, D3D11_VIDEO_DECODER
       D3D11_VIDEO_DECODER_DESC checkFormat =
       {
         *mode.guid,
-        avctx->coded_width,
-        avctx->coded_height,
+        static_cast<unsigned int>(avctx->coded_width),
+        static_cast<unsigned int>(avctx->coded_height),
         render_targets_dxgi[j]
       };
       if (!GetConfig(checkFormat, config))
@@ -736,16 +740,18 @@ void CDXVABufferPool::AddView(ID3D11View* view)
   m_freeViews.push_back(idx);
 }
 
-void CDXVABufferPool::ReturnView(ID3D11View* surf)
+bool CDXVABufferPool::ReturnView(ID3D11View* surf)
 {
   CSingleLock lock(m_section);
 
   auto it = std::find(m_views.begin(), m_views.end(), surf);
   if (it == m_views.end())
-    return;
+    return false;
 
   size_t idx = it - m_views.begin();
   m_freeViews.push_back(idx);
+
+  return true;
 }
 
 bool CDXVABufferPool::IsValid(ID3D11View* surf)
@@ -840,9 +846,9 @@ CDecoder::CDecoder(CProcessInfo& processInfo)
   , m_processInfo(processInfo)
 {
   m_event.Set();
-  m_context          = static_cast<AVD3D11VAContext*>(calloc(1, sizeof(AVD3D11VAContext)));
-  m_context->cfg     = reinterpret_cast<D3D11_VIDEO_DECODER_CONFIG*>(calloc(1, sizeof(D3D11_VIDEO_DECODER_CONFIG)));
-  m_context->surface = reinterpret_cast<ID3D11VideoDecoderOutputView**>(calloc(32, sizeof(ID3D11VideoDecoderOutputView*)));
+  m_context = av_d3d11va_alloc_context();
+  m_context->cfg = reinterpret_cast<D3D11_VIDEO_DECODER_CONFIG*>(av_mallocz(sizeof(D3D11_VIDEO_DECODER_CONFIG)));
+  m_context->surface = reinterpret_cast<ID3D11VideoDecoderOutputView**>(av_mallocz_array(32, sizeof(ID3D11VideoDecoderOutputView*)));
   m_bufferPool.reset();
   DX::Windowing()->Register(this); // @todo hadnle own device errors
 }
@@ -852,9 +858,9 @@ CDecoder::~CDecoder()
   CLog::LogF(LOGDEBUG, "destructing decoder, %p.", static_cast<void*>(this));
   DX::Windowing()->Unregister(this); // @todo hadnle own device errors
   Close();
-  free(m_context->surface);
-  free(m_context->cfg);
-  free(m_context);
+  av_freep(&m_context->surface);
+  av_freep(&m_context->cfg);
+  av_freep(&m_context);
 }
 
 long CDecoder::Release()
@@ -1310,12 +1316,10 @@ void CDecoder::FFReleaseBuffer(void* opaque, uint8_t* data)
 
 void CDecoder::ReleaseBuffer(uint8_t *data)
 {
-  ID3D11VideoDecoderOutputView* view = reinterpret_cast<ID3D11VideoDecoderOutputView*>(data);
-  if (!m_bufferPool->IsValid(view))
+  if (!m_bufferPool->ReturnView(reinterpret_cast<ID3D11VideoDecoderOutputView*>(data)))
   {
     CLog::LogF(LOGWARNING, "return of invalid surface.");
   }
-  m_bufferPool->ReturnView(view);
 
   IHardwareDecoder::Release();
 }
