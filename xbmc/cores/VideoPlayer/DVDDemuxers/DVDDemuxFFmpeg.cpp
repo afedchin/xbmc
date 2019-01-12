@@ -14,6 +14,7 @@
 #include "commons/Exception.h"
 #include "cores/FFmpeg.h"
 #include "cores/VideoPlayer/Interface/Addon/TimingConstants.h" // for DVD_TIME_BASE
+#include "DVDCodecs/DVDCodecUtils.h"
 #include "DVDDemuxUtils.h"
 #include "DVDInputStreams/DVDInputStream.h"
 #include "DVDInputStreams/DVDInputStreamFFmpeg.h"
@@ -584,6 +585,8 @@ void CDVDDemuxFFmpeg::Dispose()
   m_pkt.result = -1;
   av_packet_unref(&m_pkt.pkt);
 
+  m_h264MVCCombiner.reset();
+
   if (m_pFormatContext)
   {
     if (m_ioContext && m_pFormatContext->pb && m_pFormatContext->pb != m_ioContext)
@@ -633,6 +636,9 @@ void CDVDDemuxFFmpeg::Flush()
   m_displayTime = 0;
   m_dtsAtDisplayTime = DVD_NOPTS_VALUE;
   m_seekToKeyFrame = false;
+
+  if (m_h264MVCCombiner)
+    m_h264MVCCombiner->Flush();
 }
 
 void CDVDDemuxFFmpeg::Abort()
@@ -921,6 +927,17 @@ DemuxPacket* CDVDDemuxFFmpeg::Read()
     {
       Flush();
     }
+    else if (IsProgramChange())
+    {
+      // update streams
+      CreateStreams(m_program);
+
+      pPacket = CDVDDemuxUtils::AllocateDemuxPacket(0);
+      pPacket->iStreamId = DMX_SPECIALID_STREAMCHANGE;
+      pPacket->demuxerId = m_demuxerId;
+
+      return pPacket;
+    }
     // check size and stream index for being in a valid range
     else if (m_pkt.pkt.size < 0 ||
              m_pkt.pkt.stream_index < 0 ||
@@ -938,6 +955,9 @@ DemuxPacket* CDVDDemuxFFmpeg::Read()
 
       m_pkt.result = -1;
       av_packet_unref(&m_pkt.pkt);
+
+      if (m_h264MVCCombiner)
+        m_h264MVCCombiner->Flush();
     }
     else
     {
@@ -959,7 +979,8 @@ DemuxPacket* CDVDDemuxFFmpeg::Read()
 
       if (IsVideoReady())
       {
-        if (m_program != UINT_MAX)
+        // libavformat is confused by the interleaved mvc.
+        if ((!m_h264MVCCombiner || m_h264MVCCombiner->HasExtensionInput()) && m_program != UINT_MAX)
         {
           /* check so packet belongs to selected program */
           for (unsigned int i = 0; i < m_pFormatContext->programs[m_program]->nb_stream_indexes; i++)
@@ -1080,6 +1101,18 @@ DemuxPacket* CDVDDemuxFFmpeg::Read()
       return pPacket;
     }
 
+    if (m_h264MVCCombiner)
+    {
+      if (pPacket->iStreamId == m_h264MVCCombiner->GetH264StreamId() ||
+          pPacket->iStreamId == m_h264MVCCombiner->GetMVCStreamId())
+      {
+        pPacket = m_h264MVCCombiner->AddData(pPacket);
+        // change stream to base if combined packed is ready
+        if (pPacket->iSize)
+          stream = GetStream(m_h264MVCCombiner->GetH264StreamId());
+      }
+    }
+
     pPacket->iStreamId = stream->uniqueId;
     pPacket->demuxerId = m_demuxerId;
   }
@@ -1115,6 +1148,9 @@ bool CDVDDemuxFFmpeg::SeekTime(double time, bool backwards, double *startpts)
 
     return true;
   }
+
+  if (m_h264MVCCombiner)
+    m_h264MVCCombiner->Flush();
 
   if (!m_pInput->Seek(0, SEEK_POSSIBLE) &&
       !m_pInput->IsStreamType(DVDSTREAM_TYPE_FFMPEG))
@@ -1196,6 +1232,9 @@ bool CDVDDemuxFFmpeg::SeekByte(int64_t pos)
 
   m_pkt.result = -1;
   av_packet_unref(&m_pkt.pkt);
+
+  if (m_h264MVCCombiner)
+    m_h264MVCCombiner->Flush();
 
   return (ret >= 0);
 }
@@ -1435,6 +1474,16 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
       }
       case AVMEDIA_TYPE_VIDEO:
       {
+        if (pStream->codecpar->codec_id == AV_CODEC_ID_H264_MVC)
+        {
+          // MVC extension streams are handled specially
+          stream = new CDemuxStream();
+          stream->type = STREAM_DATA;
+          // change type of stream to not handle this as video stream
+          pStream->codecpar->codec_type = AVMEDIA_TYPE_DATA;
+          break;
+        }
+
         CDemuxStreamVideoFFmpeg* st = new CDemuxStreamVideoFFmpeg(pStream);
         stream = st;
         if(strcmp(m_pFormatContext->iformat->name, "flv") == 0)
@@ -1513,6 +1562,63 @@ CDemuxStream* CDVDDemuxFFmpeg::AddStream(int streamIdx)
         if (av_dict_get(pStream->metadata, "title", NULL, 0))
           st->m_description = av_dict_get(pStream->metadata, "title", NULL, 0)->value;
 
+        // detect MVC extensions if available
+        if (pStream->codecpar->codec_id == AV_CODEC_ID_H264)
+        {
+          if (CDVDCodecUtils::IsH264AnnexB(m_pFormatContext->iformat->name, pStream))
+          {
+            AVStream* extStream = nullptr;
+            int baseStream = -1, extensionStream = -1;
+
+            const auto extension_input = std::dynamic_pointer_cast<CDVDInputStream::IExtensionStream>(m_pInput);
+            // the input has its own extension stream
+            if (extension_input && extension_input->HasExtension() && 
+                ((extStream = extension_input->GetAVStream())))
+            {
+              m_h264MVCCombiner.reset(new CH264MVCCombiner());
+              m_h264MVCCombiner->SetH264StreamId(streamIdx);
+              m_h264MVCCombiner->SetExtensionInput(extension_input);
+              // change mode depending on eyes position
+              st->stereo_mode = extension_input->AreEyesFlipped() ? "block_rl" : "block_lr";
+            }
+            // check that extension stream exists
+            else if (CDVDCodecUtils::GetH264MVCStreamIndices(m_pFormatContext, &baseStream, &extensionStream) &&
+                     baseStream == streamIdx)
+            {
+              // it can be already created because h264 stream 
+              // can be opened twice if extra data absent 
+              if (!m_h264MVCCombiner)
+                m_h264MVCCombiner.reset(new CH264MVCCombiner());
+
+              m_h264MVCCombiner->SetH264StreamId(baseStream);
+              m_h264MVCCombiner->SetMVCStreamId(extensionStream);
+
+              extStream = m_pFormatContext->streams[extensionStream];
+            }
+
+            if (extStream)
+            {
+              // mark stream as valid for MVC decoder
+              pStream->codecpar->codec_tag = MKTAG('A', 'M', 'V', 'C');
+
+              // combine extra data from streams
+              if (pStream->codecpar->extradata_size > 0 && extStream->codecpar->extradata_size > 0)
+              {
+                uint8_t* extradata = pStream->codecpar->extradata;
+                const int alloc_size = pStream->codecpar->extradata_size +
+                                       extStream->codecpar->extradata_size +
+                                       AV_INPUT_BUFFER_PADDING_SIZE;
+
+                pStream->codecpar->extradata = static_cast<uint8_t*>(av_mallocz(alloc_size));
+                memcpy(pStream->codecpar->extradata, extradata, pStream->codecpar->extradata_size);
+                memcpy(pStream->codecpar->extradata + pStream->codecpar->extradata_size,
+                       extStream->codecpar->extradata, extStream->codecpar->extradata_size);
+                pStream->codecpar->extradata_size += extStream->codecpar->extradata_size;
+                av_free(extradata);
+              }
+            }
+          }
+        }
         break;
       }
       case AVMEDIA_TYPE_DATA:
@@ -1847,6 +1953,11 @@ std::string CDVDDemuxFFmpeg::GetStreamCodecName(int iStreamId)
 
 bool CDVDDemuxFFmpeg::IsProgramChange()
 {
+  // libavformat is confused by the interleaved mvc.
+  // disable program management for those
+  if (m_h264MVCCombiner && !m_h264MVCCombiner->HasExtensionInput())
+    return false;
+
   if (m_program == UINT_MAX)
     return false;
 

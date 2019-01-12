@@ -9,6 +9,7 @@
 #pragma once
 
 #include "DVDDemux.h"
+#include "H264MVCCombiner.h"
 #include "threads/CriticalSection.h"
 #include "threads/SystemClock.h"
 #include <map>
@@ -163,5 +164,7 @@ protected:
   double m_dtsAtDisplayTime;
   bool m_seekToKeyFrame = false;
   double m_startTime = 0;
+
+  std::unique_ptr<CH264MVCCombiner> m_h264MVCCombiner;
 };
 

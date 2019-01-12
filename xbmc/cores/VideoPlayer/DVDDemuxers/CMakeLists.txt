@@ -1,4 +1,5 @@
 set(SOURCES DemuxMultiSource.cpp
+            H264MVCCombiner.cpp
             DVDDemux.cpp
             DVDDemuxBXA.cpp
             DVDDemuxCC.cpp
@@ -10,6 +11,7 @@ set(SOURCES DemuxMultiSource.cpp
             DVDFactoryDemuxer.cpp)
 
 set(HEADERS DemuxMultiSource.h
+            H264MVCCombiner.h
             DVDDemux.h
             DVDDemuxBXA.h
             DVDDemuxCC.h

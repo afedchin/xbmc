@@ -10,9 +10,10 @@
 #include "cores/VideoPlayer/Interface/Addon/TimingConstants.h"
 #include "cores/FFmpeg.h"
 #include "Util.h"
+#include "utils/log.h"
 
 extern "C" {
-#include <libswscale/swscale.h>
+#include <libavutil/intreadwrite.h>
 }
 
 bool CDVDCodecUtils::IsVP3CompatibleWidth(int width)
@@ -64,3 +65,115 @@ double CDVDCodecUtils::NormalizeFrameduration(double frameduration, bool *match)
   }
 }
 
+bool CDVDCodecUtils::IsH264AnnexB(std::string format, AVStream* avstream)
+{
+  assert(avstream->codecpar->codec_id == AV_CODEC_ID_H264 ||
+         avstream->codecpar->codec_id == AV_CODEC_ID_H264_MVC);
+
+  if (avstream->codecpar->extradata_size < 4)
+    return true;
+  if (avstream->codecpar->extradata[0] == 1)
+    return false;
+  if (format == "avi")
+  {
+    uint8_t* src = avstream->codecpar->extradata;
+    unsigned startcode = AV_RB32(src);
+    if (startcode == 0x00000001 || (startcode & 0xffffff00) == 0x00000100)
+      return true;
+    if (avstream->codecpar->codec_tag == MKTAG('A', 'V', 'C', '1') ||
+        avstream->codecpar->codec_tag == MKTAG('a', 'v', 'c', '1'))
+      return false;
+  }
+  return true;
+}
+
+bool CDVDCodecUtils::ProcessH264MVCExtradata(uint8_t* data,
+                                             int data_size,
+                                             uint8_t** mvc_data,
+                                             int* mvc_data_size)
+{
+  uint8_t* extradata = data;
+  int extradata_size = data_size;
+
+  if (extradata_size > 4 && *(char*)extradata == 1)
+  {
+    // Find "mvcC" atom
+    uint32_t state = -1;
+    int i = 0;
+    for (; i < extradata_size; i++)
+    {
+      state = (state << 8) | extradata[i];
+      if (state == MKBETAG('m', 'v', 'c', 'C'))
+        break;
+    }
+    if (i >= 8 && i < extradata_size)
+    {
+      // Update pointers to the start of the mvcC atom
+      extradata = extradata + i - 7;
+      extradata_size = extradata_size - i + 7;
+      // verify size atom and actual size
+      if (extradata_size >= 14 && (AV_RB32(extradata) + 4) <= extradata_size)
+      {
+        extradata += 8;
+        extradata_size -= 8;
+        if (*(char*)extradata == 1)
+        {
+          if (mvc_data)
+            *mvc_data = extradata;
+          if (mvc_data_size)
+            *mvc_data_size = extradata_size;
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+bool CDVDCodecUtils::GetH264MVCStreamIndices(AVFormatContext* fmt,
+                                             int* nBaseIndex,
+                                             int* nExtensionIndex)
+{
+  *nBaseIndex = -1;
+  *nExtensionIndex = -1;
+
+  for (size_t i = 0; i < fmt->nb_streams; i++)
+  {
+    AVStream* st = fmt->streams[i];
+
+    if (st->codecpar->codec_id == AV_CODEC_ID_H264_MVC)
+    {
+      if (*nExtensionIndex == -1)
+        *nExtensionIndex = i;
+      else
+      {
+        CLog::LogF(LOGDEBUG, "multiple h264 mvc extension streams aren't supported.");
+        return false;
+      }
+    }
+    else if (st->codecpar->codec_id == AV_CODEC_ID_H264)
+    {
+      if (*nBaseIndex == -1)
+        *nBaseIndex = i;
+      else
+      {
+        AVProgram* pBaseProgram = av_find_program_from_stream(fmt, nullptr, *nBaseIndex);
+        AVProgram* pNewProgram = av_find_program_from_stream(fmt, nullptr, i);
+
+        if (!pBaseProgram && pNewProgram)
+        {
+          *nBaseIndex = i;
+          continue;
+        }
+
+        if (!pNewProgram && pBaseProgram)
+          continue;
+
+        CLog::LogF(LOGDEBUG, "multiple h264 mvc base streams aren't supported.");
+        return false;
+      }
+    }
+  }
+
+  return *nBaseIndex >= 0 && *nExtensionIndex >= 0;
+}

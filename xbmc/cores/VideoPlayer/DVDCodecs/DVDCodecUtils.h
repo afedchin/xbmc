@@ -8,11 +8,22 @@
 
 #pragma once
 
+#include <string>
+#include <stdint.h>
+
+struct AVStream;
+struct AVFormatContext;
 
 class CDVDCodecUtils
 {
 public:
   static bool IsVP3CompatibleWidth(int width);
   static double NormalizeFrameduration(double frameduration, bool *match = nullptr);
+  static bool IsH264AnnexB(std::string format, AVStream* avstream);
+  static bool ProcessH264MVCExtradata(uint8_t* extradata,
+                                      int extradata_size,
+                                      uint8_t** mvc_extradata = nullptr,
+                                      int* mvc_extradata_size = nullptr);
+  static bool GetH264MVCStreamIndices(AVFormatContext* fmt, int* nBaseIndex, int* nExtensionIndex);
 };
 
