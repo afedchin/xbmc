@@ -33,7 +33,7 @@ enum RenderMethod
   RENDER_DXVA    = 0x03,
 };
 
-class CWinRenderer : public CBaseRenderer
+class CWinRenderer : public CBaseRenderer, IVideoSettingsHolder
 {
 public:
   CWinRenderer();
@@ -65,6 +65,9 @@ public:
   bool WantsDoublePass() override;
   bool ConfigChanged(const VideoPicture& picture) override;
 
+  // IVideoSettingsHolder overrides
+  CVideoSettings* GetVideoSettings() override { return &m_videoSettings; }
+
 protected:
   void PreInit();
   virtual void Render(DWORD flags, CD3DTexture* target);
@@ -95,6 +98,7 @@ protected:
   bool m_clutLoaded;
   bool m_useDithering;
   bool m_toneMapping;
+  bool m_isMultiView;
 
   unsigned int m_destWidth;
   unsigned int m_destHeight;

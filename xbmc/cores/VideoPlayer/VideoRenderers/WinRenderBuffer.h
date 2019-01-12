@@ -29,36 +29,66 @@ enum EBufferFormat
   BUFFER_FMT_D3D11_P016,
 };
 
+class CVideoSettings;
+
+struct IVideoSettingsHolder
+{
+  virtual ~IVideoSettingsHolder() = default;
+  virtual CVideoSettings* GetVideoSettings() = 0;
+};
+
+struct SRenderBufferDesc
+{
+  EBufferFormat Format = BUFFER_FMT_NONE;
+  unsigned Width = 0;
+  unsigned Height = 0;
+  bool Software = false;
+  bool MultiView = false;
+  IVideoSettingsHolder* VideoSettings = nullptr;
+};
+
 class CRenderBuffer
 {
 public:
-  CRenderBuffer();
+  explicit CRenderBuffer();
   ~CRenderBuffer();
-  void Release();            // Release any allocated resource
-  void Lock();        // Prepare the buffer to receive data from VideoPlayer
-  void Unlock();        // VideoPlayer finished filling the buffer with data
-  void Clear() const;        // clear the buffer with solid black
 
-  bool CreateBuffer(EBufferFormat format, unsigned width, unsigned height, bool software);
+  void Release();     // Release any allocated resource
+  void Lock();        // Prepare the buffer to receive data from VideoPlayer
+  void Unlock();      // VideoPlayer finished filling the buffer with data
+  void Clear();       // clear the buffer with solid black
+
+  bool CreateBuffer(const SRenderBufferDesc& desc);
   bool UploadBuffer();
-  void AppendPicture(const VideoPicture &picture);
+  void AppendPicture(const VideoPicture& picture);
   void ReleasePicture();
 
-  unsigned int GetActivePlanes() const { return m_activePlanes; }
-  HRESULT GetResource(ID3D11Resource** ppResource, unsigned* arrayIdx);
+  unsigned int GetActivePlanes() const
+  {
+    return m_activePlanes;
+  }
+  HRESULT GetResource(ID3D11Resource** ppResource, unsigned* index);
   ID3D11View* GetView(unsigned idx = 0);
 
-  void GetDataPtr(unsigned idx, void **pData, int *pStride) const;
-  bool MapPlane(unsigned idx, void **pData, int *pStride) const;
-  bool UnmapPlane(unsigned idx) const;
+  void GetDataPtr(unsigned idx, void** pData, int* pStride);
+  bool MapPlane(unsigned idx, void** pData, int* pStride);
+  bool UnmapPlane(unsigned idx);
 
-  unsigned GetWidth() const { return m_widthTex; }
-  unsigned GetHeight() const { return m_heightTex; }
-  bool HasPic() const;
-  bool IsValid() const { return m_activePlanes > 0; }
+  unsigned GetWidth() const
+  {
+    return m_widthTex;
+  }
+  unsigned GetHeight() const
+  {
+    return m_heightTex;
+  }
+  bool IsValid() const
+  {
+    return m_activePlanes > 0;
+  }
   void QueueCopyBuffer();
+  bool IsLoaded();
 
-  bool loaded;
   unsigned int frameIdx;
   unsigned int pictureFlags = 0;
   EBufferFormat format;
@@ -78,13 +108,25 @@ public:
 private:
   bool CopyToD3D11();
   bool CopyToStaging();
-  void CopyFromStaging() const;
+  void CopyFromStaging();
   bool CopyBuffer();
-  HRESULT GetDXVAResource(ID3D11Resource** ppResource, unsigned* arrayIdx);
+  HRESULT GetHWResource(ID3D11Resource** ppResource, unsigned* arrayIdx);
+
+  void SetLoaded(bool loaded);
+  bool IsLocked();
+  void SetLocked(bool locked);
+  CD3DTexture* GetTextures();
+  D3D11_MAPPED_SUBRESOURCE* GetRects();
+  Microsoft::WRL::ComPtr<ID3D11ShaderResourceView>* GetPlanes();
+  bool UseExtendedView() const;
+  bool UseExtendedBuffer() const;
 
   bool m_locked;
+  bool m_loaded;
   bool m_bPending;
   bool m_soft;
+  bool m_isMultiView;
+
   // video buffer size
   unsigned int m_width;
   unsigned int m_height;
@@ -99,4 +141,13 @@ private:
 
   D3D11_MAPPED_SUBRESOURCE m_rects[YuvImage::MAX_PLANES];
   CD3DTexture m_textures[YuvImage::MAX_PLANES];
+
+  // multi view
+  bool m_loadedEx = false;
+  bool m_lockedEx = false;
+  Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> m_planesEx[2];
+  D3D11_MAPPED_SUBRESOURCE m_rectsEx[YuvImage::MAX_PLANES];
+  CD3DTexture m_texturesEx[YuvImage::MAX_PLANES];
+  std::string m_stereoMode;
+  IVideoSettingsHolder* m_videoSettings = nullptr;
 };

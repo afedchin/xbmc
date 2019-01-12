@@ -28,6 +28,9 @@
 #include "VideoShaders/WinVideoFilter.h"
 #include "rendering/dx/DeviceResources.h"
 #include "rendering/dx/RenderContext.h"
+#ifdef HAVE_LIBMFX
+#include "cores/VideoPlayer/DVDCodecs/Video/MFXCodec.h"
+#endif
 
 typedef struct
 {
@@ -70,6 +73,7 @@ CWinRenderer::CWinRenderer() : CBaseRenderer()
   , m_cmsOn(false)
   , m_clutLoaded(true)
   , m_toneMapping(false)
+  , m_isMultiView(false)
   , m_destWidth(0)
   , m_destHeight(0)
   , m_frameIdx(0)
@@ -234,10 +238,27 @@ bool CWinRenderer::Configure(const VideoPicture &picture, float fps, unsigned in
 
   m_srcPrimaries = GetSrcPrimaries(static_cast<AVColorPrimaries>(picture.color_primaries), picture.iWidth, picture.iHeight);
   m_format = picture.videoBuffer->GetFormat();
+
+#ifdef HAVE_LIBMFX
+  CMVCPicture* mvcPic = dynamic_cast<CMVCPicture*>(picture.videoBuffer);
+  if (mvcPic)
+    m_isMultiView = true;
+#endif // HAVE_LIBMFX
+
   if (m_format == AV_PIX_FMT_D3D11VA_VLD)
   {
-    DXVA::CDXVAOutputBuffer *dxvaBuf = static_cast<DXVA::CDXVAOutputBuffer*>(picture.videoBuffer);
-    m_dxva_format = dxvaBuf->format;
+    DXVA::CDXVAOutputBuffer *dxvaBuf = dynamic_cast<DXVA::CDXVAOutputBuffer*>(picture.videoBuffer);
+    if (dxvaBuf)
+    {
+      m_dxva_format = dxvaBuf->format;
+    }
+#ifdef HAVE_LIBMFX
+    else if (mvcPic)
+    {
+      // mvc decoder supports NV12 only
+      m_dxva_format = DXGI_FORMAT_NV12;
+    }
+#endif // HAVE_LIBMFX
   }
 
   // calculate the input frame aspect ratio
@@ -659,7 +680,7 @@ void CWinRenderer::UpdateVideoFilter()
 void CWinRenderer::Render(DWORD flags, CD3DTexture* target)
 {
   CRenderBuffer& buf = m_renderBuffers[m_iYV12RenderBuffer];
-  if (!buf.loaded)
+  if (!buf.IsLoaded())
   {
     if (!buf.UploadBuffer())
       return;
@@ -842,7 +863,7 @@ void CWinRenderer::RenderHW(DWORD flags, CD3DTexture* target)
     && buf.format != BUFFER_FMT_D3D11_P016)
     return;
 
-  if (!buf.loaded)
+  if (!buf.IsLoaded())
     return;
 
   int past = 0;
@@ -861,7 +882,7 @@ void CWinRenderer::RenderHW(DWORD flags, CD3DTexture* target)
       if (m_renderBuffers[i].frameIdx == buf.frameIdx + (future*2 + 2))
       {
         // a future frame may not be loaded yet
-        if (m_renderBuffers[i].loaded || m_renderBuffers[i].UploadBuffer())
+        if (m_renderBuffers[i].IsLoaded() || m_renderBuffers[i].UploadBuffer())
         {
           views[1 - future++] = &m_renderBuffers[i];
           found = true;
@@ -881,7 +902,7 @@ void CWinRenderer::RenderHW(DWORD flags, CD3DTexture* target)
     {
       if (m_renderBuffers[i].frameIdx == buf.frameIdx - (past*2 + 2))
       {
-        if (m_renderBuffers[i].loaded)
+        if (m_renderBuffers[i].IsLoaded())
         {
           views[3 + past++] = &m_renderBuffers[i];
           found = true;
@@ -986,7 +1007,16 @@ bool CWinRenderer::CreateRenderBuffer(int index)
   CSingleLock lock(CServiceBroker::GetWinSystem()->GetGfxContext());
   DeleteRenderBuffer(index);
 
-  if (!m_renderBuffers[index].CreateBuffer(m_bufferFormat, m_sourceWidth, m_sourceHeight, m_renderMethod == RENDER_SW))
+  const SRenderBufferDesc desc = {
+    m_bufferFormat, 
+    m_sourceWidth, 
+    m_sourceHeight, 
+    m_renderMethod == RENDER_SW, 
+    m_isMultiView,
+    this
+  };
+
+  if (!m_renderBuffers[index].CreateBuffer(desc))
   {
     CLog::Log(LOGERROR, "%s: unable to create video buffer %i", __FUNCTION__, index);
     m_renderBuffers[index].Release();
@@ -1086,15 +1116,19 @@ CRenderInfo CWinRenderer::GetRenderInfo()
     AV_PIX_FMT_YUV420P16
   };
   info.max_buffer_size = NUM_BUFFERS;
+  info.optimal_buffer_size = 4;
   if (m_renderMethod == RENDER_DXVA && m_processor)
   {
-    int buffers = m_processor->Size() + m_processor->PastRefs(); // extra buffers for past refs
-    info.optimal_buffer_size = std::min(NUM_BUFFERS, buffers);
+    // MV content is progressive always
+    if (!m_isMultiView)
+    {
+      info.optimal_buffer_size = m_processor->Size();
+      info.optimal_buffer_size = std::min(info.max_buffer_size, info.optimal_buffer_size);
+    }
     if (m_format != AV_PIX_FMT_D3D11VA_VLD)
       info.m_deintMethods.push_back(VS_INTERLACEMETHOD_DXVA_AUTO);
   }
-  else
-    info.optimal_buffer_size = 4;
+
   return info;
 }
 
@@ -1108,7 +1142,7 @@ bool CWinRenderer::NeedBuffer(int idx)
   // check if processor wants to keep past frames
   if (m_renderMethod == RENDER_DXVA && m_processor)
   {
-    if (m_renderBuffers[idx].loaded)
+    if (m_renderBuffers[idx].IsLoaded())
     {
       const int numPast = m_processor->PastRefs();
       if (m_renderBuffers[idx].pictureFlags & DVP_FLAG_INTERLACED &&
