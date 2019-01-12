@@ -28,6 +28,9 @@
 #include "threads/SingleLock.h"
 #include "utils/MathUtils.h"
 #include "utils/log.h"
+#ifdef HAVE_LIBMFX
+#include "DVDCodecs/Video/MFXCodec.h"
+#endif
 
 #include <DirectXPackedVector.h>
 
@@ -72,6 +75,9 @@ bool CRenderSystemDX::InitRenderSystem()
 #endif
   CDVDFactoryCodec::ClearHWAccels();
   DXVA::CDecoder::Register();
+#ifdef HAVE_LIBMFX
+  CMFXCodec::Register();
+#endif
   VIDEOPLAYER::CRendererFactory::ClearRenderer();
   CWinRenderer::Register();
 #if defined(TARGET_WINDOWS_DESKTOP)
