@@ -71,6 +71,7 @@ public:
   std::string GetPlayerInfo() override;
   int GetVideoBitrate() override;
   void SetSpeed(int iSpeed) override;
+  bool SupportsExtension() const override { return m_pVideoCodec && m_pVideoCodec->SupportsExtension(); }
 
   // classes
   CDVDOverlayContainer* m_pOverlayContainer;
